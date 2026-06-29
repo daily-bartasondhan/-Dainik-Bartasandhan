@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: Dainik Bartasandhan",
+  "description": "A fully functional, modern online newspaper website inspired by the layout and features of Ittefaq, featuring staff and admin portals, live interactive news feed, and robust data management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Hind Siliguri", "Inter", sans-serif;
+  --font-display: "Anek Bangla", sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-shonar: "Shonar Bangla", "SolaimanLipi", "Hind Siliguri", "Anek Bangla", sans-serif;
+  --color-primary-red: #8c1d1d;
+  --color-accent-blue: #1c3d5a;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 65s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
