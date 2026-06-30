@@ -12,6 +12,10 @@ import { Article, Staff, StaffRole } from "./src/types";
 import { initializeApp } from "firebase/app";
 import { initializeFirestore, collection, doc, setDoc, getDocs, deleteDoc, setLogLevel } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { Storage as GcsStorage } from "@google-cloud/storage";
+import xhr2 from "xhr2";
+
+(global as any).XMLHttpRequest = xhr2;
 
 setLogLevel("error");
 
@@ -45,6 +49,7 @@ const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json
 let firebaseApp: any = null;
 let firestoreDb: any = null;
 let firebaseStorage: any = null;
+let gcsStorageBucket: any = null;
 
 if (fs.existsSync(firebaseConfigPath)) {
   try {
@@ -70,6 +75,13 @@ if (fs.existsSync(firebaseConfigPath)) {
     if (config.storageBucket) {
       firebaseStorage = getStorage(firebaseApp);
       console.log("Firebase Storage initialized successfully with bucket:", config.storageBucket);
+      try {
+        const gcs = new GcsStorage({ projectId: config.projectId });
+        gcsStorageBucket = gcs.bucket(config.storageBucket);
+        console.log("Google Cloud Storage SDK initialized with bucket:", config.storageBucket);
+      } catch (gcsInitErr: any) {
+        console.error("Failed to initialize Google Cloud Storage Node SDK:", gcsInitErr.message);
+      }
     }
     console.log("Firebase initialized successfully with project ID:", config.projectId);
   } catch (error: any) {
@@ -978,16 +990,54 @@ app.post("/api/upload", async (req, res) => {
 
     let fileUrl = `/uploads/${filename}`;
 
-    // Upload to Google Cloud Storage (Firebase Storage) if active
-    if (firebaseStorage) {
+    // 1. Try to upload using Google Cloud Storage SDK
+    if (gcsStorageBucket) {
+      try {
+        const file = gcsStorageBucket.file(`uploads/${filename}`);
+        await file.save(buffer, {
+          metadata: {
+            contentType: contentType,
+          },
+          resumable: false,
+        });
+
+        // Try making public. It can fail if Uniform bucket-level access is active.
+        try {
+          await file.makePublic();
+          fileUrl = `https://storage.googleapis.com/${gcsStorageBucket.name}/uploads/${filename}`;
+          console.log(`Successfully uploaded ${filename} to GCS (Direct Public Link):`, fileUrl);
+        } catch (pubErr: any) {
+          // If Uniform access is enabled, makePublic fails, so we use the Firebase Storage public proxy URL format:
+          const encodedPath = encodeURIComponent(`uploads/${filename}`);
+          fileUrl = `https://firebasestorage.googleapis.com/v0/b/${gcsStorageBucket.name}/o/${encodedPath}?alt=media`;
+          console.log(`Successfully uploaded ${filename} to GCS (Proxy URL):`, fileUrl);
+        }
+      } catch (gcsError: any) {
+        console.error("GCS Node SDK Upload failed, attempting Web SDK fallback:", gcsError.message);
+        
+        // 2. Fallback to Firebase Web Client SDK upload
+        if (firebaseStorage) {
+          try {
+            const sRef = storageRef(firebaseStorage, `uploads/${filename}`);
+            await uploadBytes(sRef, buffer, { contentType });
+            const downloadUrl = await getDownloadURL(sRef);
+            fileUrl = downloadUrl;
+            console.log(`Successfully uploaded ${filename} using Firebase Web SDK fallback:`, fileUrl);
+          } catch (webErr: any) {
+            console.error("Firebase Web SDK fallback upload also failed:", webErr.message);
+          }
+        }
+      }
+    } else if (firebaseStorage) {
+      // If GCS Node SDK is not available, try Firebase Web SDK
       try {
         const sRef = storageRef(firebaseStorage, `uploads/${filename}`);
         await uploadBytes(sRef, buffer, { contentType });
         const downloadUrl = await getDownloadURL(sRef);
-        console.log(`Successfully uploaded ${filename} to Google Cloud Storage. URL:`, downloadUrl);
         fileUrl = downloadUrl;
-      } catch (gcsError: any) {
-        console.error("Google Cloud Storage Upload failed, falling back to local file path:", gcsError.message);
+        console.log(`Successfully uploaded ${filename} using Firebase Web SDK (No GCS SDK):`, fileUrl);
+      } catch (webErr: any) {
+        console.error("Firebase Web SDK Upload failed:", webErr.message);
       }
     }
 
