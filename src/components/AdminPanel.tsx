@@ -226,6 +226,134 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
   // Application Settings Custom States
   const [activeSettingsTab, setActiveSettingsTab] = useState("header");
+
+  const handleSaveCurrentTabSettings = () => {
+    if (activeSettingsTab === "header") {
+      const config = {
+        hdrLightLogoFilename,
+        hdrLightLogoUrl,
+        hdrDarkLogoFilename,
+        hdrDarkLogoUrl,
+        faviconLogoFilename,
+        faviconLogoUrl,
+        settingsSiteTitle,
+        settingsSiteEnglishTitle
+      };
+      localStorage.setItem("header_settings", JSON.stringify(config));
+      fetch("/api/database/settings_header", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার হেডার সেটিংস সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+          window.dispatchEvent(new Event("storage"));
+        })
+        .catch(err => console.error("Header settings save failed:", err));
+    } else if (["footer", "footer_settings_2", "social_links"].includes(activeSettingsTab)) {
+      localStorage.setItem("footer_settings", JSON.stringify(footerSettings));
+      fetch("/api/database/settings_footer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(footerSettings)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার ফুটার ও সোসাইল সেটিংস সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+          window.dispatchEvent(new Event("storage"));
+        })
+        .catch(err => console.error("Footer settings save failed:", err));
+    } else if (activeSettingsTab === "seo") {
+      localStorage.setItem("seo_settings", JSON.stringify(seoSettings));
+      fetch("/api/database/settings_seo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(seoSettings)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার এসইও সেটিংস সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+        })
+        .catch(err => console.error("SEO settings save failed:", err));
+    } else if (activeSettingsTab === "facebook") {
+      localStorage.setItem("facebook_settings", JSON.stringify(facebookSettings));
+      fetch("/api/database/settings_facebook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(facebookSettings)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার ফেসবুক সেটিংস সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+        })
+        .catch(err => console.error("Facebook settings save failed:", err));
+    } else if (activeSettingsTab === "mail") {
+      localStorage.setItem("mail_settings", JSON.stringify(mailSettings));
+      fetch("/api/database/settings_mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mailSettings)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার মেইল সেটিংস সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+        })
+        .catch(err => console.error("Mail settings save failed:", err));
+    } else if (activeSettingsTab === "login") {
+      localStorage.setItem("login_settings", JSON.stringify(loginSettings));
+      fetch("/api/database/settings_login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loginSettings)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার লগইন পোর্টাল সেটিংস সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+        })
+        .catch(err => console.error("Login settings save failed:", err));
+    } else if (activeSettingsTab === "ad") {
+      localStorage.setItem("ad_settings", JSON.stringify(adSettings));
+      fetch("/api/database/settings_ads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(adSettings)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার বিজ্ঞাপন সেটিংস সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+        })
+        .catch(err => console.error("Ads settings save failed:", err));
+    } else if (activeSettingsTab === "rss") {
+      localStorage.setItem("rss_settings", JSON.stringify(rssSettings));
+      fetch("/api/database/settings_rss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rssSettings)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার আরএসএস সেটিংস সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+        })
+        .catch(err => console.error("RSS settings save failed:", err));
+    } else if (activeSettingsTab === "category_order") {
+      localStorage.setItem("category_order_settings", JSON.stringify(categoryOrderSettings));
+      fetch("/api/database/settings_category_order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(categoryOrderSettings)
+      })
+        .then(() => {
+          setSuccessMsg("আপনার ক্যাটাগরি ক্রম সফলভাবে সংরক্ষণ ও আপডেট করা হয়েছে!");
+          setTimeout(() => setSuccessMsg(""), 4000);
+          window.dispatchEvent(new Event("storage"));
+        })
+        .catch(err => console.error("Category order settings save failed:", err));
+    } else {
+      setSuccessMsg("আপনার কনফিগারেশন সফলভাবে আপডেট করা হয়েছে!");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    }
+  };
   const [hdrLightLogoFilename, setHdrLightLogoFilename] = useState(() => {
     const saved = localStorage.getItem("header_settings");
     if (saved) {
@@ -322,11 +450,11 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
       footerDescription: "সময়ের সাথে তাল মিলিয়ে সর্বশেষ খবরের নির্ভুল গন্তব্য দৈনিক বার্তাসন্ধান। বাংলাদেশ ও বিশ্বমঞ্চের ব্রেকিং নিউজ, রাজনীতি, অর্থনীতি, খেলাধুলা কিংবা বিনোদনের সব খবর—সবার আগে আপনার হাতের মুঠোয়। খবরের নতুন দিগন্ত উন্মোচন করতে এখনই ভিজিট করুন।",
       sompadok: "সম্পাদক ও প্রকাশক : প্রকৌশলী খালিদ হাসান , ভারপ্রাপ্ত সম্পাদক : মোহাম্মদ রবিন শেখ। বৃহত্তম ফরিদপুর থেকে প্রকাশিত দৈনিক বার্তাসন্ধান। প্রকাশনার ৬ তম বর্ষ।",
       copyright: "স্বত্ব © দৈনিক বার্তাসন্ধান (২০২৬)",
-      location: "Saudi Arabia & Dhaka",
-      email: "bangladeshisoftware@gmail.com",
+      location: "বিবির বাগিচা, যাত্রবাড়ি, ঢাকা-১৩৩৬",
+      email: "dailybatrasondhan@gmail.com",
       phone: "+88 01719498694",
       fax: "+88 01719498694",
-      advertiseEmail: "bangladeshisoftware@gmail.com",
+      advertiseEmail: "adsbatrasondhan@gmail.com",
       facebook: "https://facebook.com/bangladeshisoftware",
       linkedin: "#",
       youtube: "#",
@@ -9262,10 +9390,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                   <div className="pt-4 border-t border-gray-150">
                     <button
                       type="button"
-                      onClick={() => {
-                        setSuccessMsg("আপনার কনফিগারেশন সফলভাবে আপডেট করা হয়েছে!");
-                        setTimeout(() => setSuccessMsg(""), 4000);
-                      }}
+                      onClick={handleSaveCurrentTabSettings}
                       className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs transition shadow-sm cursor-pointer select-none"
                     >
                       আপডেট করুন (Save Config)

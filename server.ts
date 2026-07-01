@@ -10,7 +10,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { Article, Staff, StaffRole } from "./src/types";
 import { initializeApp } from "firebase/app";
-import { initializeFirestore, collection, doc, setDoc, getDocs, deleteDoc, setLogLevel } from "firebase/firestore";
+import { initializeFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, setLogLevel } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Storage as GcsStorage } from "@google-cloud/storage";
 import xhr2 from "xhr2";
@@ -126,6 +126,32 @@ async function syncFromFirebase() {
   } catch (error: any) {
     console.error("Error syncing articles from Firebase:", error.message);
   }
+}
+
+// Function to save a database file to Firestore for durable persistence
+async function saveDbToFirestore(dbname: string, data: any) {
+  if (!firestoreDb) return;
+  try {
+    await setDoc(doc(firestoreDb, "databases", dbname), { data });
+    console.log(`Successfully backed up database '${dbname}' to Firestore.`);
+  } catch (error: any) {
+    console.error(`Failed to backup database '${dbname}' to Firestore:`, error.message);
+  }
+}
+
+// Function to load a database file from Firestore
+async function loadDbFromFirestore(dbname: string): Promise<any | null> {
+  if (!firestoreDb) return null;
+  try {
+    const docSnap = await getDoc(doc(firestoreDb, "databases", dbname));
+    if (docSnap.exists()) {
+      const docData = docSnap.data();
+      return docData.data;
+    }
+  } catch (error: any) {
+    console.error(`Failed to load database '${dbname}' from Firestore:`, error.message);
+  }
+  return null;
 }
 
 // Robust JSON parse helper with automatic clean up of trailing non-whitespace noise
@@ -1468,9 +1494,30 @@ app.get("/api/home-groups", (req, res) => {
 // DYNAMIC GENERIC & CUSTOM DATABASE ENDPOINTS
 // ==========================================
 
-app.get("/api/database/:dbname", (req, res) => {
+app.get("/api/database/:dbname", async (req, res) => {
   const dbname = req.params.dbname;
   const targetPath = path.join(DATABASES_DIR, `db_${dbname}.json`);
+
+  // Try to load from Firestore first
+  let dataFromFirestore = null;
+  if (firestoreDb) {
+    dataFromFirestore = await loadDbFromFirestore(dbname);
+  }
+
+  if (dataFromFirestore !== null) {
+    // Sync to local filesystem cache
+    try {
+      if (!fs.existsSync(DATABASES_DIR)) {
+        fs.mkdirSync(DATABASES_DIR, { recursive: true });
+      }
+      fs.writeFileSync(targetPath, JSON.stringify(dataFromFirestore, null, 2), "utf8");
+    } catch (err: any) {
+      console.error(`Failed to update local cache for database '${dbname}':`, err.message);
+    }
+    return res.json(dataFromFirestore);
+  }
+
+  // Fallback to local file if not found in Firestore
   if (!fs.existsSync(targetPath)) {
     if (dbname === "users") {
       const defaultUsers = [
@@ -1481,6 +1528,9 @@ app.get("/api/database/:dbname", (req, res) => {
         { "id": "U-105", "name": "মেহেদী হাসান", "email": "mehedi@yahoo.com", "phone": "01333445566", "role": "Subscriber", "status": "Active", "joinedDate": "08 Jun 2026" }
       ];
       try {
+        if (!fs.existsSync(DATABASES_DIR)) {
+          fs.mkdirSync(DATABASES_DIR, { recursive: true });
+        }
         fs.writeFileSync(targetPath, JSON.stringify(defaultUsers, null, 2), "utf8");
       } catch (err) {
         console.error("Failed to seed db_users.json:", err);
@@ -1489,44 +1539,97 @@ app.get("/api/database/:dbname", (req, res) => {
       return res.status(404).json({ error: `Database '${dbname}' not found.` });
     }
   }
+
   try {
     const raw = fs.readFileSync(targetPath, "utf8");
-    return res.json(safeParseJSON(raw, []));
+    const parsed = safeParseJSON(raw, []);
+
+    // Seed/Backup to Firestore for subsequent requests
+    if (firestoreDb && parsed) {
+      saveDbToFirestore(dbname, parsed);
+    }
+
+    return res.json(parsed);
   } catch (e: any) {
     return res.status(500).json({ error: "Failed to read database: " + e.message });
   }
 });
 
-app.post("/api/database/:dbname", (req, res) => {
+app.post("/api/database/:dbname", async (req, res) => {
   const dbname = req.params.dbname;
   const targetPath = path.join(DATABASES_DIR, `db_${dbname}.json`);
   try {
+    if (!fs.existsSync(DATABASES_DIR)) {
+      fs.mkdirSync(DATABASES_DIR, { recursive: true });
+    }
     fs.writeFileSync(targetPath, JSON.stringify(req.body, null, 2), "utf8");
+
+    // Write to Firestore persistently
+    if (firestoreDb) {
+      await saveDbToFirestore(dbname, req.body);
+    }
+
     return res.json({ success: true, message: `Database ${dbname} synchronized successfully.` });
   } catch (e: any) {
     return res.status(500).json({ error: "Failed to write database: " + e.message });
   }
 });
 
-app.get("/api/database/reporter/:userId", (req, res) => {
+app.get("/api/database/reporter/:userId", async (req, res) => {
   const userId = req.params.userId;
-  const targetPath = path.join(DATABASES_DIR, `reporter_${userId}.json`);
+  const dbname = `reporter_${userId}`;
+  const targetPath = path.join(DATABASES_DIR, `${dbname}.json`);
+
+  // Try to load from Firestore first
+  let dataFromFirestore = null;
+  if (firestoreDb) {
+    dataFromFirestore = await loadDbFromFirestore(dbname);
+  }
+
+  if (dataFromFirestore !== null) {
+    try {
+      if (!fs.existsSync(DATABASES_DIR)) {
+        fs.mkdirSync(DATABASES_DIR, { recursive: true });
+      }
+      fs.writeFileSync(targetPath, JSON.stringify(dataFromFirestore, null, 2), "utf8");
+    } catch (err: any) {
+      console.error(`Failed to update local cache for reporter '${userId}':`, err.message);
+    }
+    return res.json(dataFromFirestore);
+  }
+
   if (!fs.existsSync(targetPath)) {
     return res.status(404).json({ error: `Database for reporter '${userId}' not found.` });
   }
+
   try {
     const raw = fs.readFileSync(targetPath, "utf8");
-    return res.json(safeParseJSON(raw, []));
+    const parsed = safeParseJSON(raw, []);
+
+    if (firestoreDb && parsed) {
+      saveDbToFirestore(dbname, parsed);
+    }
+
+    return res.json(parsed);
   } catch (e: any) {
     return res.status(500).json({ error: "Failed to read database: " + e.message });
   }
 });
 
-app.post("/api/database/reporter/:userId", (req, res) => {
+app.post("/api/database/reporter/:userId", async (req, res) => {
   const userId = req.params.userId;
-  const targetPath = path.join(DATABASES_DIR, `reporter_${userId}.json`);
+  const dbname = `reporter_${userId}`;
+  const targetPath = path.join(DATABASES_DIR, `${dbname}.json`);
   try {
+    if (!fs.existsSync(DATABASES_DIR)) {
+      fs.mkdirSync(DATABASES_DIR, { recursive: true });
+    }
     fs.writeFileSync(targetPath, JSON.stringify(req.body, null, 2), "utf8");
+
+    if (firestoreDb) {
+      await saveDbToFirestore(dbname, req.body);
+    }
+
     return res.json({ success: true, message: `Database for reporter ${userId} synchronized successfully.` });
   } catch (e: any) {
     return res.status(500).json({ error: "Failed to write database: " + e.message });
