@@ -1559,12 +1559,19 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
       title = `${article.title}`;
       const plainContent = stripHtmlTags(article.content || article.subtitle || article.description || "");
       description = plainContent.substring(0, 160) + "...";
-      if (article.images && article.images.length > 0) {
+      
+      if (article.images && Array.isArray(article.images) && article.images.length > 0) {
         const img = article.images[0];
-        if (img.startsWith("/")) {
-          imageUrl = `${origin}${img}`;
-        } else {
-          imageUrl = img;
+        if (img && typeof img === "string" && img.trim() !== "") {
+          if (img.startsWith("http://") || img.startsWith("https://")) {
+            imageUrl = img;
+          } else {
+            if (img.startsWith("/")) {
+              imageUrl = `${origin}${img}`;
+            } else {
+              imageUrl = `${origin}/${img}`;
+            }
+          }
         }
       }
       
@@ -1577,9 +1584,12 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
     }
   }
 
-  // Escape special chars in tags
+  // Escape special chars in tags to prevent double quotes breaking HTML
   const escapedTitle = title.replace(/"/g, "&quot;");
   const escapedDesc = description.replace(/"/g, "&quot;");
+  const escapedImageUrl = imageUrl.replace(/"/g, "&quot;");
+  const escapedShareUrl = shareUrl.replace(/"/g, "&quot;");
+  const escapedSiteName = siteName.replace(/"/g, "&quot;");
 
   // Generate the injection HTML block
   const metaTags = `
@@ -1589,16 +1599,16 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
     <meta property="og:type" content="article" />
     <meta property="og:title" content="${escapedTitle}" />
     <meta property="og:description" content="${escapedDesc}" />
-    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image" content="${escapedImageUrl}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:url" content="${shareUrl}" />
-    <meta property="og:site_name" content="${siteName}" />
+    <meta property="og:url" content="${escapedShareUrl}" />
+    <meta property="og:site_name" content="${escapedSiteName}" />
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapedTitle}" />
     <meta name="twitter:description" content="${escapedDesc}" />
-    <meta name="twitter:image" content="${imageUrl}" />
+    <meta name="twitter:image" content="${escapedImageUrl}" />
   `;
 
   // Strip existing <title> and <meta name="description"> if any

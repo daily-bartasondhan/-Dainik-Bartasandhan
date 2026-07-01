@@ -33,6 +33,12 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
       })
       .then((data) => {
         setArticle(data);
+        if (data.dSubTitle && data.dSubTitle.trim() !== "") {
+          const expectedPath = `/news/${encodeURIComponent(data.dSubTitle.trim())}/${data.id}`;
+          if (window.location.pathname !== expectedPath) {
+            window.history.replaceState({}, "", expectedPath);
+          }
+        }
         // Load related category news
         fetch(`/api/news?category=${data.category}`)
           .then((r) => r.json())
