@@ -1545,12 +1545,16 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
   let title = "দৈনিক বার্তাসন্ধান | Dainik Bartasandhan - নির্ভরযোগ্য অনলাইন সংবাদপত্র";
   let description = "সারাদেশের সর্বশেষ খবর, ব্রেকিং নিউজ, রাজনীতি, অর্থনীতি, খেলাধুলা, বিনোদন এবং প্রযুক্তির খবর পেতে ভিজিট করুন দৈনিক বার্তাসন্ধান।";
   let imageUrl = "https://i.postimg.cc/sXj31mRp/Gemini-Generated-Image-mttmdrmttmdrmttm.png";
-  const origin = `${req.protocol}://${req.get("host")}`;
+  
+  const host = req.get("host") || "";
+  const origin = host.includes("localhost") ? `http://${host}` : `https://${host}`;
   let shareUrl = `${origin}${req.originalUrl}`;
+  let siteName = "দৈনিক বার্তাসন্ধান";
 
+  let article: any = null;
   if (articleId) {
     const db = readDB();
-    const article = db.articles.find((item) => String(item.id) === String(articleId));
+    article = db.articles.find((item: any) => String(item.id) === String(articleId));
     if (article) {
       title = `${article.title}`;
       const plainContent = stripHtmlTags(article.content || article.subtitle || article.description || "");
@@ -1563,7 +1567,13 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
           imageUrl = img;
         }
       }
-      shareUrl = `${origin}/news/${article.id}`;
+      
+      if (article.dSubTitle && article.dSubTitle.trim() !== "") {
+        siteName = article.dSubTitle.trim();
+        shareUrl = `${origin}/news/${encodeURIComponent(article.dSubTitle.trim())}/${article.id}`;
+      } else {
+        shareUrl = `${origin}/news/${article.id}`;
+      }
     }
   }
 
@@ -1573,15 +1583,17 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
 
   // Generate the injection HTML block
   const metaTags = `
-    <title>${escapedTitle} | দৈনিক বার্তাসন্ধান</title>
+    <title>${escapedTitle}</title>
     <meta name="description" content="${escapedDesc}" />
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="article" />
     <meta property="og:title" content="${escapedTitle}" />
     <meta property="og:description" content="${escapedDesc}" />
     <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:url" content="${shareUrl}" />
-    <meta property="og:site_name" content="দৈনিক বার্তাসন্ধান" />
+    <meta property="og:site_name" content="${siteName}" />
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapedTitle}" />
@@ -1603,8 +1615,13 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     // Intercept in development for quick testability
-    app.get("/news/:id", (req, res, next) => {
-      serveIndexWithMeta(req, res, req.params.id);
+    app.get("/news/:param1", (req, res) => {
+      serveIndexWithMeta(req, res, req.params.param1);
+    });
+    app.get("/news/:param1/:param2", (req, res) => {
+      const { param1, param2 } = req.params;
+      const id = /^\d+$/.test(param2) ? param2 : param1;
+      serveIndexWithMeta(req, res, id);
     });
     app.get("/", (req, res, next) => {
       if (req.query.article) {
@@ -1621,8 +1638,13 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     
-    app.get("/news/:id", (req, res) => {
-      serveIndexWithMeta(req, res, req.params.id);
+    app.get("/news/:param1", (req, res) => {
+      serveIndexWithMeta(req, res, req.params.param1);
+    });
+    app.get("/news/:param1/:param2", (req, res) => {
+      const { param1, param2 } = req.params;
+      const id = /^\d+$/.test(param2) ? param2 : param1;
+      serveIndexWithMeta(req, res, id);
     });
     
     app.get("/", (req, res, next) => {
@@ -1637,9 +1659,12 @@ async function startServer() {
       if (req.query.article) {
         return serveIndexWithMeta(req, res, req.query.article as string);
       }
-      const matchNews = req.path.match(/^\/news\/([^\/]+)/);
+      const matchNews = req.path.match(/^\/news\/([^\/]+)(?:\/([^\/]+))?/);
       if (matchNews) {
-        return serveIndexWithMeta(req, res, matchNews[1]);
+        const param1 = matchNews[1];
+        const param2 = matchNews[2];
+        const id = (param2 && /^\d+$/.test(param2)) ? param2 : param1;
+        return serveIndexWithMeta(req, res, id);
       }
       res.sendFile(path.join(distPath, "index.html"));
     });

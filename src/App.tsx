@@ -414,8 +414,19 @@ export default function App() {
         setActiveSubcategory(sub);
         setPage("category");
       } else if (path.startsWith("/news/")) {
-        const parts = path.split("/");
-        const id = parts[2] || "";
+        const parts = path.split("/").filter(Boolean);
+        let id = "";
+        if (parts.length >= 3) {
+          if (/^\d+$/.test(parts[2])) {
+            id = parts[2];
+          } else if (/^\d+$/.test(parts[1])) {
+            id = parts[1];
+          } else {
+            id = parts[2] || parts[1];
+          }
+        } else {
+          id = parts[1] || "";
+        }
         setSelectedArticleId(id);
         setPage("item-detail");
       } else {
@@ -426,7 +437,7 @@ export default function App() {
     handleUrlRouting();
     window.addEventListener("popstate", handleUrlRouting);
     return () => window.removeEventListener("popstate", handleUrlRouting);
-  }, []);
+  }, [articles]);
 
   // Helper mechanism to set page and update address bar state
   const navigateTo = (targetPage: string, params?: { category?: string; subcategory?: string; articleId?: string }) => {
@@ -447,7 +458,12 @@ export default function App() {
       }
     } else if (targetPage === "item-detail" && params?.articleId) {
       setSelectedArticleId(params.articleId);
-      path = `/news/${params.articleId}`;
+      const art = articles.find(a => String(a.id) === String(params.articleId));
+      if (art && art.dSubTitle && art.dSubTitle.trim() !== "") {
+        path = `/news/${encodeURIComponent(art.dSubTitle.trim())}/${params.articleId}`;
+      } else {
+        path = `/news/${params.articleId}`;
+      }
     } else if (targetPage === "home") {
       setActiveCategory("");
       setActiveSubcategory("");

@@ -208,6 +208,13 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
     );
   }
 
+  const getShareUrl = () => {
+    if (article.dSubTitle && article.dSubTitle.trim() !== "") {
+      return `${window.location.origin}/news/${encodeURIComponent(article.dSubTitle.trim())}/${article.id}`;
+    }
+    return `${window.location.origin}/news/${article.id}`;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 font-sans" id={`article-page-${article.id}`}>
       
@@ -234,7 +241,7 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
           <button
             onClick={() => {
               if (article) {
-                const shareText = `${article.category} | ${article.title}\n${window.location.origin}/news/${article.id}`;
+                const shareText = `${article.category} | ${article.title}\n${getShareUrl()}`;
                 navigator.clipboard.writeText(shareText);
                 alert("সংবাদের ক্যাটাগরি, শিরোনাম এবং লিংক কপি করা হয়েছে!");
               }
@@ -249,7 +256,7 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
           {article && (
             <>
               <a
-                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/news/${article.id}`)}`}
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-display font-semibold rounded-full transition-all cursor-pointer border border-blue-100"
@@ -260,7 +267,7 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
               </a>
 
               <a
-                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${article.category} | ${article.title}\n${window.location.origin}/news/${article.id}`)}`}
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${article.category} | ${article.title}\n${getShareUrl()}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-display font-semibold rounded-full transition-all cursor-pointer border border-green-100"
