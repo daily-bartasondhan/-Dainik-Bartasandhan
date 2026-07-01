@@ -10011,7 +10011,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
             <div className="flex flex-wrap items-center gap-x-5 gap-y-3.5 text-xs font-normal text-gray-950 pb-5 border-b border-gray-100 mb-5 select-none hover:text-slate-700">
               {/* Facebook */}
               <a
-                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}/${sharingArticle.id}` : `${window.location.origin}/news/${sharingArticle.id}`)}`}
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}` : `${window.location.origin}/news/${sharingArticle.id}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
@@ -10022,7 +10022,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
               {/* Twitter */}
               <a
-                href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}/${sharingArticle.id}` : `${window.location.origin}/news/${sharingArticle.id}`)}&text=${encodeURIComponent(`${sharingArticle.category} | ${sharingArticle.title}`)}`}
+                href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}` : `${window.location.origin}/news/${sharingArticle.id}`)}&text=${encodeURIComponent(`${sharingArticle.category} | ${sharingArticle.title}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-slate-800 hover:text-sky-500 transition-colors cursor-pointer"
@@ -10033,7 +10033,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
               {/* LinkedIn */}
               <a
-                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}/${sharingArticle.id}` : `${window.location.origin}/news/${sharingArticle.id}`)}`}
+                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}` : `${window.location.origin}/news/${sharingArticle.id}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-slate-800 hover:text-blue-700 transition-colors cursor-pointer"
@@ -10044,7 +10044,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
               {/* WhatsApp */}
               <a
-                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${sharingArticle.category} | ${sharingArticle.title}\n${sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}/${sharingArticle.id}` : `${window.location.origin}/news/${sharingArticle.id}`}`)}`}
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${sharingArticle.category} | ${sharingArticle.title}\n${sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}` : `${window.location.origin}/news/${sharingArticle.id}`}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-slate-800 hover:text-green-650 transition-colors cursor-pointer"
@@ -10056,7 +10056,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
               {/* Copy Link */}
               <button
                 onClick={() => {
-                  const targetUrl = sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}/${sharingArticle.id}` : `${window.location.origin}/news/${sharingArticle.id}`;
+                  const targetUrl = sharingArticle.dSubTitle && sharingArticle.dSubTitle.trim() !== "" ? `${window.location.origin}/news/${encodeURIComponent(sharingArticle.dSubTitle.trim())}` : `${window.location.origin}/news/${sharingArticle.id}`;
                   const shareText = `${sharingArticle.category} | ${sharingArticle.title}\n${targetUrl}`;
                   navigator.clipboard.writeText(shareText);
                   setCopiedLink(true);

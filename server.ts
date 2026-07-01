@@ -838,7 +838,12 @@ app.get("/api/news/popular", (req, res) => {
 app.get("/api/news/:id", (req, res) => {
   const id = req.params.id;
   const db = readDB();
-  const articleIndex = db.articles.findIndex((item) => String(item.id) === String(id));
+  let articleIndex = db.articles.findIndex((item) => String(item.id) === String(id));
+
+  if (articleIndex === -1) {
+    const decodedSlug = decodeURIComponent(id).trim();
+    articleIndex = db.articles.findIndex((item) => item.dSubTitle && item.dSubTitle.trim() === decodedSlug);
+  }
 
   if (articleIndex === -1) {
     return res.status(404).json({ error: "পদ্ধতিগত সংবাদ খুঁজে পাওয়া যায়নি" });
@@ -1555,6 +1560,10 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
   if (articleId) {
     const db = readDB();
     article = db.articles.find((item: any) => String(item.id) === String(articleId));
+    if (!article) {
+      const decodedSlug = decodeURIComponent(articleId).trim();
+      article = db.articles.find((item: any) => item.dSubTitle && item.dSubTitle.trim() === decodedSlug);
+    }
     if (article) {
       title = `${article.title}`;
       const plainContent = stripHtmlTags(article.content || article.subtitle || article.description || "");
@@ -1577,7 +1586,7 @@ function serveIndexWithMeta(req: any, res: any, articleId?: string) {
       
       if (article.dSubTitle && article.dSubTitle.trim() !== "") {
         siteName = article.dSubTitle.trim();
-        shareUrl = `${origin}/news/${encodeURIComponent(article.dSubTitle.trim())}/${article.id}`;
+        shareUrl = `${origin}/news/${encodeURIComponent(article.dSubTitle.trim())}`;
       } else {
         shareUrl = `${origin}/news/${article.id}`;
       }

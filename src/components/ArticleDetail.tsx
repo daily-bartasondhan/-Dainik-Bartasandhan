@@ -216,7 +216,7 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
 
   const getShareUrl = () => {
     if (article.dSubTitle && article.dSubTitle.trim() !== "") {
-      return `${window.location.origin}/news/${encodeURIComponent(article.dSubTitle.trim())}/${article.id}`;
+      return `${window.location.origin}/news/${encodeURIComponent(article.dSubTitle.trim())}`;
     }
     return `${window.location.origin}/news/${article.id}`;
   };
@@ -307,11 +307,6 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
           {/* Headline Title */}
           <h1 className="text-3xl md:text-4xl font-display font-extrabold text-gray-900 leading-tight flex flex-wrap items-center gap-2">
             <span>{article.title}</span>
-            {article.dSubTitle && (
-              <span className="text-sm md:text-base font-sans font-semibold text-red-700 bg-red-50 border border-red-200/60 px-2.5 py-0.5 rounded select-none">
-                {article.dSubTitle}
-              </span>
-            )}
           </h1>
 
           {/* Subtitle */}

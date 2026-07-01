@@ -415,17 +415,9 @@ export default function App() {
         setPage("category");
       } else if (path.startsWith("/news/")) {
         const parts = path.split("/").filter(Boolean);
-        let id = "";
-        if (parts.length >= 3) {
-          if (/^\d+$/.test(parts[2])) {
-            id = parts[2];
-          } else if (/^\d+$/.test(parts[1])) {
-            id = parts[1];
-          } else {
-            id = parts[2] || parts[1];
-          }
-        } else {
-          id = parts[1] || "";
+        let id = parts[1] || "";
+        if (parts.length >= 3 && /^\d+$/.test(parts[2])) {
+          id = parts[2];
         }
         setSelectedArticleId(id);
         setPage("item-detail");
@@ -460,7 +452,7 @@ export default function App() {
       setSelectedArticleId(params.articleId);
       const art = articles.find(a => String(a.id) === String(params.articleId));
       if (art && art.dSubTitle && art.dSubTitle.trim() !== "") {
-        path = `/news/${encodeURIComponent(art.dSubTitle.trim())}/${params.articleId}`;
+        path = `/news/${encodeURIComponent(art.dSubTitle.trim())}`;
       } else {
         path = `/news/${params.articleId}`;
       }
