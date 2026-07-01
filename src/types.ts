@@ -20,6 +20,7 @@ export interface Article {
   images: string[]; // Array of 1 to 5 images
   imageDescriptions?: string[]; // Array of descriptions corresponding to images
   videoUrl?: string; // Embedded video url
+  dSubTitle?: string; // Domain or sub-title for aesthetic title display
   reporterId: string;
   reporterName: string;
   createdAt?: string;

@@ -859,7 +859,7 @@ app.get("/api/news/:id", (req, res) => {
 
 // 6. Submit or Upload News Article (Direct from Admin / Reporter)
 app.post("/api/news", (req, res) => {
-  const { title, subtitle, content, category, subcategory, tags, images, imageDescriptions, videoUrl, reporterId, reporterName, status, publicationDate, createdAt, updatedAt, isLead, isHeadline } = req.body;
+  const { title, subtitle, dSubTitle, content, category, subcategory, tags, images, imageDescriptions, videoUrl, reporterId, reporterName, status, publicationDate, createdAt, updatedAt, isLead, isHeadline } = req.body;
   const db = readDB();
 
   if (!title || !content || !category) {
@@ -874,6 +874,7 @@ app.post("/api/news", (req, res) => {
     id: Date.now().toString(),
     title,
     subtitle: subtitle || "",
+    dSubTitle: dSubTitle || "",
     description: cleanDescription,
     content,
     category,
@@ -1421,7 +1422,7 @@ app.get("/api/home-groups", (req, res) => {
   const sorted = [...published].sort((a, b) => new Date(b.publicationDate).getTime() - new Date(a.publicationDate).getTime());
 
   // Filter out videos from standard article news so that videos don't become standard leadStory / latestNews.
-  const articleNews = sorted.filter(item => item.category !== "ভিডিও" && item.category !== "video" && !item.videoUrl);
+  const articleNews = sorted.filter(item => !item.videoUrl || item.videoUrl.trim() === "");
 
   // Lead Story is the newest article marked isLead, or the first article if none
   const leadNews = articleNews.find(item => item.isLead) || articleNews[0] || null;
@@ -1435,7 +1436,7 @@ app.get("/api/home-groups", (req, res) => {
   }
 
   // Video news comes first!
-  const videoNews = sorted.filter(item => item.category === "ভিডিও" || item.category === "video" || item.videoUrl);
+  const videoNews = sorted.filter(item => item.videoUrl && item.videoUrl.trim() !== "");
 
   // Popular news (views based)
   const popularNews = [...published].sort((a, b) => b.views - a.views).slice(0, 8);

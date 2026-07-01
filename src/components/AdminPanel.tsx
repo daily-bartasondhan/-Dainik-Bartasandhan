@@ -134,6 +134,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
   // Direct News Form State
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
+  const [dSubTitle, setDSubTitle] = useState("");
   const [category, setCategory] = useState("জাতীয়");
   const [subcategory, setSubcategory] = useState("");
   const [content, setContent] = useState("");
@@ -1671,6 +1672,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
       body: JSON.stringify({
         title,
         subtitle,
+        dSubTitle,
         content,
         category,
         subcategory,
@@ -1705,6 +1707,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
         
         setTitle("");
         setSubtitle("");
+        setDSubTitle("");
         setContent("");
         setVideoUrl("");
         setTagsInput("");
@@ -1724,6 +1727,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
     // Populate all fields for editing
     setTitle(art.title || "");
     setSubtitle(art.subtitle || "");
+    setDSubTitle(art.dSubTitle || "");
     setCategory(art.category || "জাতীয়");
     setSubcategory(art.subcategory || "");
     setContent(art.content || "");
@@ -1924,6 +1928,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
               ...art,
               title,
               subtitle,
+              dSubTitle,
               content,
               category,
               subcategory,
@@ -1943,6 +1948,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
         const payload = {
           title,
           subtitle,
+          dSubTitle,
           content,
           category,
           subcategory,
@@ -1982,6 +1988,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
       body: JSON.stringify({
         title,
         subtitle,
+        dSubTitle,
         content,
         category,
         subcategory,
@@ -9307,23 +9314,36 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                   }}
                   className="space-y-5"
                 >
-                  {/* Post Title * Input */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      id="video-post-title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      onFocus={() => setIsVideoTitleFocused(true)}
-                      onBlur={() => setIsVideoTitleFocused(false)}
-                      className="w-full text-xs px-3.5 py-3.5 bg-white border border-gray-300 rounded focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 placeholder:text-gray-450 font-sans"
-                    />
-                    {!title && !isVideoTitleFocused && (
-                      <span className="absolute left-3.5 top-[15px] pointer-events-none text-xs text-gray-400 font-sans select-none">
-                        Post Title <span className="text-red-500 font-sans">*</span>
-                      </span>
-                    )}
+                  {/* Post Title & D-Sub Title side-by-side */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2 relative">
+                      <input
+                        type="text"
+                        required
+                        id="video-post-title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        onFocus={() => setIsVideoTitleFocused(true)}
+                        onBlur={() => setIsVideoTitleFocused(false)}
+                        className="w-full text-xs px-3.5 py-3.5 bg-white border border-gray-300 rounded focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 placeholder:text-gray-450 font-sans"
+                      />
+                      {!title && !isVideoTitleFocused && (
+                        <span className="absolute left-3.5 top-[15px] pointer-events-none text-xs text-gray-400 font-sans select-none">
+                          Post Title <span className="text-red-500 font-sans">*</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="video-post-dsubtitle"
+                        placeholder="D-Sub Title (optional)"
+                        value={dSubTitle}
+                        onChange={(e) => setDSubTitle(e.target.value)}
+                        className="w-full text-xs px-3.5 py-3.5 bg-white border border-gray-300 rounded focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 placeholder:text-gray-450 font-sans"
+                      />
+                    </div>
                   </div>
 
                   {/* Post Video Link * Input */}
@@ -9444,38 +9464,53 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                   }}
                   className="space-y-5"
                 >
-                  {/* Post Title Label and Input with Pink/Purple AI Badges */}
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#334155] uppercase tracking-wider font-sans mb-1.5 block select-none">
-                      Post Title <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
+                  {/* Post Title & D-Sub Title side-by-side */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="text-[11px] font-semibold text-[#334155] uppercase tracking-wider font-sans mb-1.5 block select-none">
+                        Post Title <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Post Title"
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          className="w-full text-xs px-4 py-3 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 placeholder:text-gray-400 font-sans"
+                        />
+                        
+                        {/* Simulated AI Helper badge */}
+                        <div
+                          className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center bg-gradient-to-tr from-purple-500 to-pink-500 text-white p-1 rounded-sm cursor-pointer hover:opacity-90 select-none shadow-xs"
+                          title="AI Generate Headline"
+                          onClick={() => {
+                            if (!title) {
+                              setTitle("ফরিদপুরে উৎসবমুখর পরিবেশে সাহিত্য মেলা শুরু");
+                            } else {
+                              setTitle(title + " | দৈনিক ফরিদপুর কড়চা");
+                            }
+                          }}
+                        >
+                          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 21l-.813-5.096L3 15l5.096-.813L9 9l.813 5.096L15 15l-5.187.904z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.071 4.929a10 10 0 00-14.142 0M19.071 19.071a10 10 0 000-14.142" strokeWidth="1.5" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#334155] uppercase tracking-wider font-sans mb-1.5 block select-none">
+                        D-Sub Title <span className="text-gray-400 font-medium text-[10px]">( optional )</span>
+                      </label>
                       <input
                         type="text"
-                        required
-                        placeholder="Post Title"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="e.g. dainikfari.com"
+                        value={dSubTitle}
+                        onChange={(e) => setDSubTitle(e.target.value)}
                         className="w-full text-xs px-4 py-3 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 placeholder:text-gray-400 font-sans"
                       />
-                      
-                      {/* Simulated AI Helper badge */}
-                      <div
-                        className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center bg-gradient-to-tr from-purple-500 to-pink-500 text-white p-1 rounded-sm cursor-pointer hover:opacity-90 select-none shadow-xs"
-                        title="AI Generate Headline"
-                        onClick={() => {
-                          if (!title) {
-                            setTitle("ফরিদপুরে উৎসবমুখর পরিবেশে সাহিত্য মেলা শুরু");
-                          } else {
-                            setTitle(title + " | দৈনিক ফরিদপুর কড়চা");
-                          }
-                        }}
-                      >
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 21l-.813-5.096L3 15l5.096-.813L9 9l.813 5.096L15 15l-5.187.904z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.071 4.929a10 10 0 00-14.142 0M19.071 19.071a10 10 0 000-14.142" strokeWidth="1.5" />
-                        </svg>
-                      </div>
                     </div>
                   </div>
 

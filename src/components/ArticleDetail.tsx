@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Article } from "../types";
-import { getBengaliDateTime, toBengaliDigits } from "../utils";
+import { getBengaliDateTime, toBengaliDigits, getBengaliTimeAgo } from "../utils";
 import { ArrowLeft, Clock, Eye, Share2, Printer, ThumbsUp, MessageSquare, Play, Video, Facebook, MessageCircle } from "lucide-react";
 
 interface ArticleDetailProps {
@@ -17,6 +17,9 @@ interface ArticleDetailProps {
 export default function ArticleDetail({ articleId, onBack, onSelectArticle }: ArticleDetailProps) {
   const [article, setArticle] = useState<Article | null>(null);
   const [related, setRelated] = useState<Article[]>([]);
+  const [latestNews, setLatestNews] = useState<Article[]>([]);
+  const [popularNews, setPopularNews] = useState<Article[]>([]);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<"latest" | "popular">("latest");
   const [loading, setLoading] = useState(true);
 
   // Load article details and increment views on mount
@@ -41,6 +44,22 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
         console.error("Error loading articleDetails", err);
       })
       .finally(() => setLoading(false));
+
+    // Load latest news
+    fetch("/api/news?limit=10")
+      .then((r) => r.json())
+      .then((latestData) => {
+        setLatestNews(latestData);
+      })
+      .catch((err) => console.error("Error loading latest news:", err));
+
+    // Load popular news
+    fetch("/api/news/popular")
+      .then((r) => r.json())
+      .then((popularData) => {
+        setPopularNews(popularData.slice(0, 10));
+      })
+      .catch((err) => console.error("Error loading popular news:", err));
   }, [articleId]);
 
   // Utility to split content and insert distributed images (2 to 5) beautifully
@@ -273,8 +292,13 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
           </div>
 
           {/* Headline Title */}
-          <h1 className="text-3xl md:text-4xl font-display font-extrabold text-gray-900 leading-tight">
-            {article.title}
+          <h1 className="text-3xl md:text-4xl font-display font-extrabold text-gray-900 leading-tight flex flex-wrap items-center gap-2">
+            <span>{article.title}</span>
+            {article.dSubTitle && (
+              <span className="text-sm md:text-base font-sans font-semibold text-red-700 bg-red-50 border border-red-200/60 px-2.5 py-0.5 rounded select-none">
+                {article.dSubTitle}
+              </span>
+            )}
           </h1>
 
           {/* Subtitle */}
@@ -354,8 +378,9 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
           {/* Related News Under-Content Grid */}
           <div className="pt-8 border-t border-gray-100 space-y-6" id="under-article-related-news">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
-              <h3 className="text-xl font-display font-bold text-gray-900 relative">
-                সম্পর্কিত আরো খবর
+              <h3 className="text-xl font-display font-bold text-gray-900 relative leading-tight">
+                <span className="block text-[11px] uppercase tracking-wider text-gray-400 font-sans font-bold mb-0.5">Tags:</span>
+                সম্পর্কিত খবর
                 <span className="absolute bottom-[-13px] left-0 w-16 h-[3px] bg-red-700 rounded-full"></span>
               </h3>
               <span className="text-xs font-display text-gray-500 font-semibold bg-gray-100 px-2.5 py-1 rounded-full">
@@ -415,44 +440,62 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
         <div className="lg:col-span-4 space-y-6">
           
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-            <div className="border-b-2 border-red-700 pb-2">
-              <h3 className="text-lg font-display font-extrabold text-accent-blue">
-                সম্পর্কিত খবর ({article.category})
-              </h3>
+            {/* Tabs for Latest vs Popular */}
+            <div className="flex border-b border-gray-200 pb-2 gap-4">
+              <button
+                onClick={() => setActiveSidebarTab("latest")}
+                className={`flex items-center gap-1.5 pb-2 text-sm font-display font-bold relative transition-all ${
+                  activeSidebarTab === "latest"
+                    ? "text-red-700 border-b-2 border-red-700"
+                    : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                <Clock size={15} className={activeSidebarTab === "latest" ? "text-red-700" : "text-gray-400"} />
+                সর্বশেষ সংবাদ
+              </button>
+              <button
+                onClick={() => setActiveSidebarTab("popular")}
+                className={`flex items-center gap-1.5 pb-2 text-sm font-display font-bold relative transition-all ${
+                  activeSidebarTab === "popular"
+                    ? "text-red-700 border-b-2 border-red-700"
+                    : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                <Eye size={15} className={activeSidebarTab === "popular" ? "text-red-700" : "text-gray-400"} />
+                জনপ্রিয় সংবাদ
+              </button>
             </div>
 
-            {related.length === 0 ? (
-              <p className="text-sm text-gray-400 font-display text-center py-6">
-                এই বিভাগে অন্য কোনো খবর পাওয়া যায়নি।
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {related.map((item) => (
+            <div className="space-y-3 pt-2">
+              {((activeSidebarTab === "latest" ? latestNews : popularNews).length === 0) ? (
+                <p className="text-xs text-gray-400 font-display text-center py-4">
+                  কোনো খবর পাওয়া যায়নি।
+                </p>
+              ) : (
+                (activeSidebarTab === "latest" ? latestNews : popularNews).slice(0, 10).map((item, idx) => (
                   <div
                     key={item.id}
-                    onClick={() => onSelectArticle(item.id)}
-                    className="group cursor-pointer flex gap-3 p-2 rounded-lg hover:bg-gray-50 transition-all border border-transparent hover:border-gray-100"
+                    onClick={() => {
+                      onSelectArticle(item.id);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="group cursor-pointer flex gap-3 py-2.5 border-b border-gray-50 last:border-0 hover:bg-slate-50/50 px-2 rounded-lg transition-colors"
                   >
-                    <div className="w-20 h-16 rounded overflow-hidden shrink-0">
-                      <img
-                        src={item.images[0] || "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=400&q=80"}
-                        alt={item.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                        referrerPolicy="no-referrer"
-                      />
+                    <div className="text-2xl font-display font-bold text-slate-300 group-hover:text-red-700/60 transition-colors w-7 shrink-0 flex items-center justify-center">
+                      {toBengaliDigits(idx + 1)}
                     </div>
-                    <div className="flex-1 space-y-1">
-                      <h4 className="text-xs font-display font-bold text-gray-800 group-hover:text-primary-red transition-colors line-clamp-2 leading-relaxed">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs md:text-sm font-display font-bold text-gray-800 group-hover:text-red-700 transition-colors line-clamp-2 leading-relaxed">
                         {item.title}
                       </h4>
-                      <span className="text-[10px] text-gray-400 block font-mono">
-                        {getBengaliDateTime(item.publicationDate).split(",")[1]}
+                      <span className="text-[10px] text-gray-400 font-display block mt-0.5">
+                        {getBengaliTimeAgo(item.publicationDate)}
                       </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </div>
 
           {/* Support Helpline Box */}

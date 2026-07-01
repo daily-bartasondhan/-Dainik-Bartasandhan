@@ -901,29 +901,38 @@ export default function App() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                       {(!homeBlocks.videoNews || homeBlocks.videoNews.length === 0) ? (
-                        // Render standard placeholder video report items from our standard categories to make the feed beautiful!
-                        articles.slice(0, 4).map((art, idx) => (
-                          <div
-                            key={art.id || idx}
-                            onClick={() => {
-                              navigateTo("item-detail", { articleId: art.id });
-                            }}
-                            className="group cursor-pointer bg-white/5 rounded-xl border border-white/5 overflow-hidden hover:bg-white/10 transition-all shadow-md relative"
-                          >
-                            <div className="aspect-video relative overflow-hidden">
-                              <img src={art.images[0]} alt={art.title} className="w-full h-full object-cover grayscale-10 group-hover:grayscale-0 group-hover:scale-103 transition-all duration-300" referrerPolicy="no-referrer" />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                <Play className="text-white fill-white bg-primary-red/80 p-3 rounded-full w-12 h-12 hover:scale-110 transition-transform" />
+                        (() => {
+                          const availableVideos = articles.filter(art => art.videoUrl && art.videoUrl.trim() !== "");
+                          if (availableVideos.length === 0) {
+                            return (
+                              <div className="col-span-full py-8 text-center text-gray-400 font-display text-sm">
+                                কোনো ভিডিও সংবাদ পাওয়া যায়নি।
+                              </div>
+                            );
+                          }
+                          return availableVideos.slice(0, 4).map((art, idx) => (
+                            <div
+                              key={art.id || idx}
+                              onClick={() => {
+                                navigateTo("item-detail", { articleId: art.id });
+                              }}
+                              className="group cursor-pointer bg-white/5 rounded-xl border border-white/5 overflow-hidden hover:bg-white/10 transition-all shadow-md relative"
+                            >
+                              <div className="aspect-video relative overflow-hidden">
+                                <img src={art.images[0]} alt={art.title} className="w-full h-full object-cover grayscale-10 group-hover:grayscale-0 group-hover:scale-103 transition-all duration-300" referrerPolicy="no-referrer" />
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                  <Play className="text-white fill-white bg-primary-red/80 p-3 rounded-full w-12 h-12 hover:scale-110 transition-transform" />
+                                </div>
+                              </div>
+                              <div className="p-3.5 space-y-1">
+                                <span className="text-[9px] font-bold text-red-400 uppercase tracking-widest">{art.category}</span>
+                                <h4 className="text-xs font-display font-semibold text-gray-100 group-hover:text-red-300 transition-colors line-clamp-2 leading-relaxed">
+                                  {art.title}
+                                </h4>
                               </div>
                             </div>
-                            <div className="p-3.5 space-y-1">
-                              <span className="text-[9px] font-bold text-red-400 uppercase tracking-widest">{art.category}</span>
-                              <h4 className="text-xs font-display font-semibold text-gray-100 group-hover:text-red-300 transition-colors line-clamp-2 leading-relaxed">
-                                {art.title}
-                              </h4>
-                            </div>
-                          </div>
-                        ))
+                          ));
+                        })()
                       ) : (
                         homeBlocks.videoNews.map((art) => (
                           <div

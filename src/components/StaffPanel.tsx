@@ -30,6 +30,7 @@ export default function StaffPanel({ onLoginSuccess, activeUser, onNavigateHome 
   // Form Fields
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
+  const [dSubTitle, setDSubTitle] = useState("");
   const [category, setCategory] = useState("জাতীয়");
   const [subcategory, setSubcategory] = useState("");
   const [content, setContent] = useState("");
@@ -676,6 +677,7 @@ export default function StaffPanel({ onLoginSuccess, activeUser, onNavigateHome 
     const payload = {
       title,
       subtitle,
+      dSubTitle,
       content,
       category,
       subcategory,
@@ -700,6 +702,7 @@ export default function StaffPanel({ onLoginSuccess, activeUser, onNavigateHome 
         // Reset forms
         setTitle("");
         setSubtitle("");
+        setDSubTitle("");
         setContent("");
         setVideoUrl("");
         setTagsInput("");
@@ -1075,20 +1078,36 @@ export default function StaffPanel({ onLoginSuccess, activeUser, onNavigateHome 
             {activeStaffTab === "create_post" && (
               <div className="font-sans space-y-4 text-slate-800">
                 <form onSubmit={handleCreateNews} className="space-y-5">
-                  {/* Post Title */}
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-slate-800 block" id="label-post-title">
-                      Post Title
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Post Title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full h-11 px-3 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white text-slate-800 font-sans"
-                      id="input-post-title"
-                    />
+                  {/* Post Title & D-Sub Title */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2 space-y-1.5">
+                      <label className="text-sm font-semibold text-slate-800 block" id="label-post-title">
+                        Post Title
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Post Title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="w-full h-11 px-3 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white text-slate-800 font-sans"
+                        id="input-post-title"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-slate-800 block" id="label-post-dsubtitle">
+                        D-Sub Title <span className="text-yellow-600 font-medium text-xs ml-1">( optional )</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. dainikfari.com"
+                        value={dSubTitle}
+                        onChange={(e) => setDSubTitle(e.target.value)}
+                        className="w-full h-11 px-3 border border-gray-300 rounded text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white text-slate-800 font-sans"
+                        id="input-post-dsubtitle"
+                      />
+                    </div>
                   </div>
 
                   {/* Post Thumbnail */}
