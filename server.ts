@@ -1041,6 +1041,14 @@ app.post("/api/upload", async (req, res) => {
       }
     }
 
+    // If we fell back to a local URL because cloud storage upload failed or wasn't configured,
+    // we return the original base64 string (image) so it gets stored persistently in the database as a Base64 string.
+    // This prevents images from breaking when the container/server restarts or local disk is cleared.
+    if (fileUrl.startsWith("/uploads/")) {
+      console.log(`Cloud storage was not available or failed. Returning persistent Base64 string fallback for ${filename}`);
+      fileUrl = image;
+    }
+
     res.json({ success: true, url: fileUrl });
   } catch (error: any) {
     console.error("Upload error:", error);
@@ -1519,9 +1527,91 @@ app.post("/api/database/reporter/:userId", (req, res) => {
   }
 });
 
+// Helper to serve index.html with dynamically injected Open Graph / Meta tags for SEO & Social Sharing
+function serveIndexWithMeta(req: any, res: any, articleId?: string) {
+  const distPath = path.join(process.cwd(), "dist");
+  let indexPath = path.join(distPath, "index.html");
+  if (!fs.existsSync(indexPath)) {
+    indexPath = path.join(process.cwd(), "index.html");
+  }
+
+  if (!fs.existsSync(indexPath)) {
+    return res.status(404).send("index.html not found");
+  }
+
+  let html = fs.readFileSync(indexPath, "utf8");
+
+  let title = "দৈনিক বার্তাসন্ধান | Dainik Bartasandhan - নির্ভরযোগ্য অনলাইন সংবাদপত্র";
+  let description = "সারাদেশের সর্বশেষ খবর, ব্রেকিং নিউজ, রাজনীতি, অর্থনীতি, খেলাধুলা, বিনোদন এবং প্রযুক্তির খবর পেতে ভিজিট করুন দৈনিক বার্তাসন্ধান।";
+  let imageUrl = "https://i.postimg.cc/sXj31mRp/Gemini-Generated-Image-mttmdrmttmdrmttm.png";
+  const origin = `${req.protocol}://${req.get("host")}`;
+  let shareUrl = `${origin}${req.originalUrl}`;
+
+  if (articleId) {
+    const db = readDB();
+    const article = db.articles.find((item) => String(item.id) === String(articleId));
+    if (article) {
+      title = `${article.title}`;
+      const plainContent = stripHtmlTags(article.content || article.subtitle || article.description || "");
+      description = plainContent.substring(0, 160) + "...";
+      if (article.images && article.images.length > 0) {
+        const img = article.images[0];
+        if (img.startsWith("/")) {
+          imageUrl = `${origin}${img}`;
+        } else {
+          imageUrl = img;
+        }
+      }
+      shareUrl = `${origin}/news/${article.id}`;
+    }
+  }
+
+  // Escape special chars in tags
+  const escapedTitle = title.replace(/"/g, "&quot;");
+  const escapedDesc = description.replace(/"/g, "&quot;");
+
+  // Generate the injection HTML block
+  const metaTags = `
+    <title>${escapedTitle} | দৈনিক বার্তাসন্ধান</title>
+    <meta name="description" content="${escapedDesc}" />
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="${escapedTitle}" />
+    <meta property="og:description" content="${escapedDesc}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:url" content="${shareUrl}" />
+    <meta property="og:site_name" content="দৈনিক বার্তাসন্ধান" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapedTitle}" />
+    <meta name="twitter:description" content="${escapedDesc}" />
+    <meta name="twitter:image" content="${imageUrl}" />
+  `;
+
+  // Strip existing <title> and <meta name="description"> if any
+  html = html.replace(/<title>[^<]*<\/title>/gi, "");
+  html = html.replace(/<meta\s+name=["']description["']\s+content=["'][^"']*["']\s*\/?>/gi, "");
+  
+  // Inject before </head>
+  html = html.replace("</head>", `${metaTags}\n  </head>`);
+
+  res.send(html);
+}
+
 // Serve frontend in production or hook Vite development server
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    // Intercept in development for quick testability
+    app.get("/news/:id", (req, res, next) => {
+      serveIndexWithMeta(req, res, req.params.id);
+    });
+    app.get("/", (req, res, next) => {
+      if (req.query.article) {
+        return serveIndexWithMeta(req, res, req.query.article as string);
+      }
+      next();
+    });
+
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -1529,8 +1619,27 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
+    
+    app.get("/news/:id", (req, res) => {
+      serveIndexWithMeta(req, res, req.params.id);
+    });
+    
+    app.get("/", (req, res, next) => {
+      if (req.query.article) {
+        return serveIndexWithMeta(req, res, req.query.article as string);
+      }
+      next();
+    });
+
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
+      if (req.query.article) {
+        return serveIndexWithMeta(req, res, req.query.article as string);
+      }
+      const matchNews = req.path.match(/^\/news\/([^\/]+)/);
+      if (matchNews) {
+        return serveIndexWithMeta(req, res, matchNews[1]);
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

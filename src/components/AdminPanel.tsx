@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Staff, Article, VisitorLog } from "../types";
-import { toBengaliDigits } from "../utils";
+import { toBengaliDigits, compressImage } from "../utils";
 import VisitorLogsTable from "./VisitorLogsTable";
 import RichTextEditor from "./RichTextEditor";
 import CategoryDropdownSelect from "./CategoryDropdownSelect";
@@ -9545,16 +9545,17 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                           if (file) {
                             const originalName = file.name;
                             setUploadedThumbnailName(originalName + " (Uploading...)");
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              const base64 = reader.result as string;
-                              fetch("/api/upload", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ image: base64, name: originalName })
+                            compressImage(file)
+                              .then(base64 => {
+                                if (!base64) throw new Error("Could not compress image");
+                                return fetch("/api/upload", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ image: base64, name: originalName })
+                                });
                               })
-                                .then(res => res.json())
-                                .then(data => {
+                              .then(res => res.json())
+                              .then(data => {
                                   if (data.success && data.url) {
                                     const copy = [...images];
                                     copy[0] = data.url;
@@ -9569,8 +9570,6 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                                   alert("ইমেজ আপলোড ব্যর্থ হয়েছে: " + err.message);
                                   setUploadedThumbnailName("Upload failed");
                                 });
-                            };
-                            reader.readAsDataURL(file);
                           }
                         }}
                       />
@@ -9977,7 +9976,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
             <div className="flex flex-wrap items-center gap-x-5 gap-y-3.5 text-xs font-normal text-gray-950 pb-5 border-b border-gray-100 mb-5 select-none hover:text-slate-700">
               {/* Facebook */}
               <a
-                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/?article=${sharingArticle.id}`)}`}
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/news/${sharingArticle.id}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
@@ -9988,7 +9987,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
               {/* Twitter */}
               <a
-                href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`${window.location.origin}/?article=${sharingArticle.id}`)}&text=${encodeURIComponent(sharingArticle.title)}`}
+                href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`${window.location.origin}/news/${sharingArticle.id}`)}&text=${encodeURIComponent(`${sharingArticle.category} | ${sharingArticle.title}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-slate-800 hover:text-sky-500 transition-colors cursor-pointer"
@@ -9999,7 +9998,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
               {/* LinkedIn */}
               <a
-                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window.location.origin}/?article=${sharingArticle.id}`)}`}
+                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window.location.origin}/news/${sharingArticle.id}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-slate-800 hover:text-blue-700 transition-colors cursor-pointer"
@@ -10010,7 +10009,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
               {/* WhatsApp */}
               <a
-                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(sharingArticle.title + ' ' + `${window.location.origin}/?article=${sharingArticle.id}`)}`}
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${sharingArticle.category} | ${sharingArticle.title}\n${window.location.origin}/news/${sharingArticle.id}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-slate-800 hover:text-green-650 transition-colors cursor-pointer"
@@ -10022,8 +10021,8 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
               {/* Copy Link */}
               <button
                 onClick={() => {
-                  const shareUrl = `${window.location.origin}/?article=${sharingArticle.id}`;
-                  navigator.clipboard.writeText(shareUrl);
+                  const shareText = `${sharingArticle.category} | ${sharingArticle.title}\n${window.location.origin}/news/${sharingArticle.id}`;
+                  navigator.clipboard.writeText(shareText);
                   setCopiedLink(true);
                   setTimeout(() => setCopiedLink(false), 2000);
                 }}

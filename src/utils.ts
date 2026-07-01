@@ -312,3 +312,61 @@ export function getBengaliTimeAgo(dateString: string): string {
     return `${day} ${months[date.getMonth()]} ${toBengaliDigits(date.getFullYear())}`;
   }
 }
+
+// Compress image on client side using canvas to prevent large uploads and support Base64 persistence fallback
+export function compressImage(file: File, maxWidth = 850, maxHeight = 850, quality = 0.7): Promise<string> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith("image/")) {
+      // If it's not an image (e.g. video), just read as normal base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          // Use white background in case of transparent png to avoid black background in jpeg conversion
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(dataUrl);
+        } else {
+          resolve(e.target?.result as string);
+        }
+      };
+      img.onerror = () => {
+        resolve(e.target?.result as string);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => {
+      resolve("");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+

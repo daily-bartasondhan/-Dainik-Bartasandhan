@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Staff, Article } from "../types";
-import { toBengaliDigits, getBengaliDateTime } from "../utils";
+import { toBengaliDigits, getBengaliDateTime, compressImage } from "../utils";
 import CategoryDropdownSelect from "./CategoryDropdownSelect";
 import { Lock, FileText, Send, User, MapPin, Eye, BookOpen, AlertCircle, PlusCircle, CheckCircle2, Copy, KeyRound, Plus, List, Image, Video, Download, Trash2, Edit, Bold, Italic, Underline, Strikethrough, Subscript, Superscript, AlignLeft, AlignCenter, AlignRight, Minus, ListOrdered, Grid, Type, Paintbrush, Indent, Outdent, Link, Search, Printer, Maximize2, Smartphone, Code } from "lucide-react";
 
@@ -122,32 +122,31 @@ export default function StaffPanel({ onLoginSuccess, activeUser, onNavigateHome 
       const file = e.target.files[0];
       const originalName = file.name;
       setThumbnailName(originalName + " (Uploading...)");
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        fetch("/api/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: base64String, name: originalName })
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.success && data.url) {
-              const updatedImages = [...images];
-              updatedImages[0] = data.url;
-              setImages(updatedImages);
-              setThumbnailName(originalName + " (Uploaded)");
-            } else {
-              throw new Error(data.error || "Upload failed");
-            }
-          })
-          .catch(err => {
-            console.error("Staff thumbnail upload failed:", err);
-            alert("থাম্বনেইল আপলোড ব্যর্থ হয়েছে: " + err.message);
-            setThumbnailName("Upload failed");
+      compressImage(file)
+        .then(base64String => {
+          if (!base64String) throw new Error("Could not compress image");
+          return fetch("/api/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: base64String, name: originalName })
           });
-      };
-      reader.readAsDataURL(file);
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.url) {
+            const updatedImages = [...images];
+            updatedImages[0] = data.url;
+            setImages(updatedImages);
+            setThumbnailName(originalName + " (Uploaded)");
+          } else {
+            throw new Error(data.error || "Upload failed");
+          }
+        })
+        .catch(err => {
+          console.error("Staff thumbnail upload failed:", err);
+          alert("থাম্বনেইল আপলোড ব্যর্থ হয়েছে: " + err.message);
+          setThumbnailName("Upload failed");
+        });
     }
   };
 

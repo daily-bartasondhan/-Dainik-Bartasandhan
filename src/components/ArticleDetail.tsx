@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from "react";
 import { Article } from "../types";
 import { getBengaliDateTime, toBengaliDigits } from "../utils";
-import { ArrowLeft, Clock, Eye, Share2, Printer, ThumbsUp, MessageSquare, Play, Video } from "lucide-react";
+import { ArrowLeft, Clock, Eye, Share2, Printer, ThumbsUp, MessageSquare, Play, Video, Facebook, MessageCircle } from "lucide-react";
 
 interface ArticleDetailProps {
   articleId: string;
@@ -203,7 +203,7 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
           <span>পূর্বের পাতায় ফিরে যান</span>
         </button>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => window.print()}
             className="p-2 text-gray-400 hover:text-accent-blue hover:bg-gray-100 rounded-full transition-all cursor-pointer"
@@ -211,17 +211,47 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
           >
             <Printer size={16} />
           </button>
+          
           <button
             onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
-              alert("সংবাদের লিংক ক্লিপবোর্ডে কপি করা হয়েছে!");
+              if (article) {
+                const shareText = `${article.category} | ${article.title}\n${window.location.origin}/news/${article.id}`;
+                navigator.clipboard.writeText(shareText);
+                alert("সংবাদের ক্যাটাগরি, শিরোনাম এবং লিংক কপি করা হয়েছে!");
+              }
             }}
-            className="flex items-center gap-1.5 px-3 py-1 bg-red-50 hover:bg-red-100 text-primary-red text-xs font-display font-semibold rounded-full transition-all"
-            title="শেয়ার করুন"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-primary-red text-xs font-display font-semibold rounded-full transition-all cursor-pointer border border-red-100"
+            title="ক্যাটাগরি ও শিরোনামসহ লিংক কপি করুন"
           >
             <Share2 size={13} />
             <span>লিংক কপি</span>
           </button>
+
+          {article && (
+            <>
+              <a
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/news/${article.id}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-display font-semibold rounded-full transition-all cursor-pointer border border-blue-100"
+                title="ফেসবুকে শেয়ার করুন"
+              >
+                <Facebook size={13} />
+                <span>ফেসবুক</span>
+              </a>
+
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${article.category} | ${article.title}\n${window.location.origin}/news/${article.id}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-display font-semibold rounded-full transition-all cursor-pointer border border-green-100"
+                title="হোয়াটসঅ্যাপে শেয়ার করুন"
+              >
+                <MessageCircle size={13} />
+                <span>হোয়াটসঅ্যাপ</span>
+              </a>
+            </>
+          )}
         </div>
       </div>
 
@@ -320,6 +350,64 @@ export default function ArticleDetail({ articleId, onBack, onSelectArticle }: Ar
               ))}
             </div>
           )}
+
+          {/* Related News Under-Content Grid */}
+          <div className="pt-8 border-t border-gray-100 space-y-6" id="under-article-related-news">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+              <h3 className="text-xl font-display font-bold text-gray-900 relative">
+                সম্পর্কিত আরো খবর
+                <span className="absolute bottom-[-13px] left-0 w-16 h-[3px] bg-red-700 rounded-full"></span>
+              </h3>
+              <span className="text-xs font-display text-gray-500 font-semibold bg-gray-100 px-2.5 py-1 rounded-full">
+                {article.category}
+              </span>
+            </div>
+
+            {related.length === 0 ? (
+              <p className="text-sm text-gray-400 font-display py-4">
+                এই ক্যাটাগরিতে আর কোনো পুরোনো খবর পাওয়া যায়নি।
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {related.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      onSelectArticle(item.id);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="group cursor-pointer bg-slate-50/50 hover:bg-white rounded-xl p-3 border border-gray-100 hover:border-gray-200/80 hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      {/* Image */}
+                      <div className="aspect-[16/10] w-full rounded-lg overflow-hidden bg-gray-100 relative shadow-2xs">
+                        <img
+                          src={item.images[0] || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=600&q=80"}
+                          alt={item.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                        <span className="absolute top-2 left-2 bg-red-700 text-white text-[10px] font-display font-bold px-2 py-0.5 rounded-md shadow-xs">
+                          {item.category}
+                        </span>
+                      </div>
+
+                      {/* Title */}
+                      <h4 className="text-sm font-display font-bold text-gray-800 leading-snug group-hover:text-primary-red transition-colors line-clamp-2">
+                        {item.title}
+                      </h4>
+                    </div>
+
+                    {/* Meta */}
+                    <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-display">
+                      <span>{item.reporterName || "অনলাইন ডেস্ক"}</span>
+                      <span>{getBengaliDateTime(item.publicationDate).split(",")[0]}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
         </div>
 
