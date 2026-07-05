@@ -853,8 +853,17 @@ export default function StaffPanel({ onLoginSuccess, activeUser, onNavigateHome 
       {/* Premium minimal header */}
       <div className="bg-white rounded border border-gray-200 p-4 mb-6 shadow-2xs flex justify-between items-center gap-4 flex-col sm:flex-row">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center font-sans font-black text-blue-600 text-lg uppercase shadow-3xs select-none shrink-0 border border-blue-200">
-            {activeUser.name ? activeUser.name.charAt(0) : "S"}
+          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden font-sans font-black text-blue-600 text-lg uppercase shadow-3xs select-none shrink-0 border border-blue-200">
+            {activeUser.picture ? (
+              <img
+                src={activeUser.picture}
+                alt={activeUser.name}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              activeUser.name ? activeUser.name.charAt(0) : "S"
+            )}
           </div>
           <div className="text-center sm:text-left">
             <h2 className="text-xs md:text-sm font-bold font-sans text-slate-800 tracking-tight leading-relaxed">

@@ -1715,7 +1715,8 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
         mobile: newMobile,
         nid: newNid,
         presentAddress: newPresentAddress,
-        permanentAddress: newPermanentAddress
+        permanentAddress: newPermanentAddress,
+        picture: pictureBase64
       })
     })
       .then(async (res) => {
@@ -1750,6 +1751,8 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
         setNewNid("");
         setNewPresentAddress("");
         setNewPermanentAddress("");
+        setPictureBase64("");
+        setPictureFileName("");
         loadData();
       })
       .catch((err) => setErrorMsg(err.message));
@@ -4522,6 +4525,43 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                   </div>
                 </div>
 
+                {/* Profile Picture Upload Section */}
+                <div className="space-y-1">
+                  <label className="font-bold block text-slate-800">সংবাদকর্মীর প্রোফাইল ছবি (Profile Picture)</label>
+                  <div className="flex items-center gap-3 mt-1 border border-gray-200 rounded p-2 bg-[#f8fafc]/50">
+                    {pictureBase64 ? (
+                      <img
+                        src={pictureBase64}
+                        alt="Preview"
+                        className="w-10 h-10 rounded object-cover border border-gray-250 shadow-sm"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 bg-slate-100 border border-slate-200 rounded flex items-center justify-center text-[10px] text-gray-500 font-bold">
+                        ছবি নেই
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            const file = e.target.files[0];
+                            setPictureFileName(file.name);
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setPictureBase64(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="text-[10px] text-slate-600 file:mr-2 file:py-0.5 file:px-2 file:rounded file:border file:border-gray-300 file:text-[10px] file:font-sans file:bg-white hover:file:bg-slate-50 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded cursor-pointer mt-2 text-xs">
                   স্টাফ কর্মী লাইভ রেজিস্টার করুন
                 </button>
@@ -4558,13 +4598,24 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
                   {/* ID card focus components */}
                   <div className="flex gap-4 pt-1 text-xs">
-                    <div className="w-20 h-24 bg-white/10 rounded border border-white/10 flex flex-col justify-center items-center text-center p-1 shrink-0">
-                      <div className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-xs mb-1">
-                        {newName ? newName.charAt(0) : "P"}
-                      </div>
-                      <span className="block text-[7px] text-green-400 font-bold border border-green-500/30 px-1 mt-1 rounded font-display bg-green-500/10 animate-pulse">
-                        সক্রিয়
-                      </span>
+                    <div className="w-20 h-24 bg-white/10 rounded border border-white/10 flex flex-col justify-center items-center text-center p-1 shrink-0 overflow-hidden relative">
+                      {pictureBase64 ? (
+                        <img
+                          src={pictureBase64}
+                          alt="ID Photo"
+                          className="w-full h-full object-cover rounded"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <>
+                          <div className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-xs mb-1">
+                            {newName ? newName.charAt(0) : "P"}
+                          </div>
+                          <span className="block text-[7px] text-green-400 font-bold border border-green-500/30 px-1 mt-1 rounded font-display bg-green-500/10 animate-pulse">
+                            সক্রিয়
+                          </span>
+                        </>
+                      )}
                     </div>
 
                     <div className="flex-1 space-y-1.5">

@@ -96,35 +96,68 @@ async function syncFromFirebase() {
     return;
   }
   try {
-    console.log("Syncing articles from Firebase Firestore...");
-    const querySnapshot = await getDocs(collection(firestoreDb, "articles"));
-    const firebaseArticles: Article[] = [];
-    querySnapshot.forEach((doc) => {
-      firebaseArticles.push(doc.data() as Article);
-    });
+    console.log("Syncing master databases from Firebase Firestore...");
+    
+    // 1. Sync posts
+    const firebasePosts = await loadDbFromFirestore("posts");
+    if (firebasePosts && Array.isArray(firebasePosts)) {
+      console.log(`Restored ${firebasePosts.length} published posts from Firestore.`);
+      fs.writeFileSync(path.join(DATABASES_DIR, "db_posts.json"), JSON.stringify(firebasePosts, null, 2), "utf8");
+    }
 
-    console.log(`Fetched ${firebaseArticles.length} articles from Firestore.`);
+    // 2. Sync request_posts
+    const firebaseRequestPosts = await loadDbFromFirestore("request_posts");
+    if (firebaseRequestPosts && Array.isArray(firebaseRequestPosts)) {
+      console.log(`Restored ${firebaseRequestPosts.length} request posts from Firestore.`);
+      fs.writeFileSync(path.join(DATABASES_DIR, "db_request_posts.json"), JSON.stringify(firebaseRequestPosts, null, 2), "utf8");
+    }
 
-    if (firebaseArticles.length > 0) {
-      const db = readDB();
-      // Set Firestore as the absolute source of truth
-      db.articles = firebaseArticles;
-      writeDB(db);
-      console.log("Firebase synchronization completed. Local database updated from Firestore successfully.");
-    } else {
-      const db = readDB();
-      if (db.articles.length > 0) {
-        console.log(`Firestore is empty. Seeding ${db.articles.length} local articles to Firestore...`);
-        for (const art of db.articles) {
-          if (art && art.id) {
-            await setDoc(doc(firestoreDb, "articles", String(art.id)), art);
-          }
+    // 3. Sync reporters/staff
+    const firebaseReporters = await loadDbFromFirestore("reporters");
+    if (firebaseReporters && Array.isArray(firebaseReporters)) {
+      console.log(`Restored ${firebaseReporters.length} reporters/staff from Firestore.`);
+      fs.writeFileSync(path.join(DATABASES_DIR, "db_reporters.json"), JSON.stringify(firebaseReporters, null, 2), "utf8");
+      
+      // Also write back-up on main db.json
+      const posts = firebasePosts || [];
+      const requests = firebaseRequestPosts || [];
+      const dbCombined = {
+        articles: [...posts, ...requests],
+        staff: firebaseReporters
+      };
+      fs.writeFileSync(DB_PATH, JSON.stringify(dbCombined, null, 2), "utf8");
+
+      // Sync individual reporter articles
+      for (const rep of firebaseReporters) {
+        const repData = await loadDbFromFirestore(`reporter_${rep.userId}`);
+        if (repData) {
+          fs.writeFileSync(path.join(DATABASES_DIR, `reporter_${rep.userId}.json`), JSON.stringify(repData, null, 2), "utf8");
         }
-        console.log("Firestore seeding completed.");
+      }
+    } else {
+      // Seed fallback/legacy
+      const db = readDB();
+      if (db.articles.length > 0 || db.staff.length > 0) {
+        console.log("Firestore collections empty. Seeding local databases to Firestore...");
+        const posts = db.articles.filter(item => item.status === "Published" || item.status === "Approved" || item.status === "Imported");
+        const requestPosts = db.articles.filter(item => item.status === "Pending" || item.status === "Draft" || item.status === "Rejected");
+        await saveDbToFirestore("posts", posts);
+        await saveDbToFirestore("request_posts", requestPosts);
+        await saveDbToFirestore("reporters", db.staff);
+        for (const reporter of db.staff) {
+          const reporterArticles = db.articles.filter(art => art.reporterId === reporter.userId);
+          const reporterDB = {
+            profile: reporter,
+            articles: reporterArticles,
+            lastUpdated: new Date().toISOString()
+          };
+          await saveDbToFirestore(`reporter_${reporter.userId}`, reporterDB);
+        }
+        console.log("Firestore seeding completed successfully.");
       }
     }
   } catch (error: any) {
-    console.error("Error syncing articles from Firebase:", error.message);
+    console.error("Error syncing databases from Firebase:", error.message);
   }
 }
 
@@ -588,6 +621,23 @@ function writeDB(data: { articles: Article[]; staff: Staff[] }) {
         lastUpdated: new Date().toISOString()
       };
       fs.writeFileSync(repPath, JSON.stringify(reporterDB, null, 2), "utf8");
+    }
+
+    // 5. Save all of these directly to Firestore for continuous, non-destructible cloud sync
+    if (firestoreDb) {
+      saveDbToFirestore("posts", posts).catch((e) => console.error("Firestore sync error for posts:", e.message));
+      saveDbToFirestore("request_posts", requestPosts).catch((e) => console.error("Firestore sync error for request posts:", e.message));
+      saveDbToFirestore("reporters", data.staff).catch((e) => console.error("Firestore sync error for reporters:", e.message));
+      
+      for (const reporter of data.staff) {
+        const reporterArticles = data.articles.filter(art => art.reporterId === reporter.userId);
+        const reporterDB = {
+          profile: reporter,
+          articles: reporterArticles,
+          lastUpdated: new Date().toISOString()
+        };
+        saveDbToFirestore(`reporter_${reporter.userId}`, reporterDB).catch((e) => console.error(`Firestore sync error for reporter_${reporter.userId}:`, e.message));
+      }
     }
   } catch (error) {
     console.error("Error partitioning database writes:", error);

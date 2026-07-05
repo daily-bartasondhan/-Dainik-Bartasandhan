@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { Article } from "../types";
 import { getBengaliTimeAgo, toBengaliDigits } from "../utils";
-import { Clock, Flame } from "lucide-react";
+import { Clock, Flame, ChevronDown } from "lucide-react";
 
 // Bengali digit translations for sidebar list prefixing
 const BENGALI_NUMBERS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯", "১০"];
@@ -205,26 +205,31 @@ const DEFAULT_SIDEBAR_LATEST = [
     id: "side-0",
     title: "সীমান্তে পুশ ইন ইস্যু আলোচনা হবে বিজিবি-বিএসএফ বৈঠকে: স্বরাষ্ট্রমন্ত্রী",
     publicationDate: new Date(Date.now() - 5 * 24 * 60 * 60000).toISOString(),
+    images: ["https://images.unsplash.com/photo-1508847154043-be12a26c86c5?auto=format&fit=crop&w=400&q=80"]
   },
   {
     id: "side-1",
     title: "রুদ্ধশ্বাস ম্যাচে টাইগারদের ঐতিহাসিক সিরিজ জয়: বিশ্বমঞ্চে লাল সবুজের নতুন গর্জন",
     publicationDate: new Date(Date.now() - 5 * 24 * 60 * 60000).toISOString(),
+    images: ["https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=400&q=80"]
   },
   {
     id: "side-2",
     title: "ঈদ ধামাকা হিসেবে বড় পর্দায় শাকিব খানের নতুন ছবি 'তুফান-২' আসছে",
     publicationDate: new Date(Date.now() - 5 * 24 * 60 * 60000).toISOString(),
+    images: ["https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=400&q=80"]
   },
   {
     id: "side-3",
     title: "নির্বাচনী সংস্কার ও অবাধ-সুষ্ঠু ভোটের দাবিতে আজ রাজধানীতে মহাসমাবেশ",
     publicationDate: new Date(Date.now() - 5 * 24 * 60 * 60000).toISOString(),
+    images: ["https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?auto=format&fit=crop&w=400&q=80"]
   },
   {
     id: "side-4",
     title: "জাতীয় সংসদে নতুন বাজেট পেশ: শিক্ষা, স্বাস্থ্য ও প্রযুক্তিতে সর্বোচ্চ অগ্রাধিকার বরাদ্দ",
     publicationDate: new Date(Date.now() - 5 * 24 * 60 * 60000).toISOString(),
+    images: ["https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=400&q=80"]
   }
 ];
 
@@ -277,14 +282,16 @@ export default function LeadNewsGrid({
     }
   }
 
+  const [visibleBottomCount, setVisibleBottomCount] = useState(6);
+
   // Assign the exact sequence nodes dynamically
   const leadStory = combined[0]; 
   const leftStack = combined.slice(1, 5);
-  const bottomGrid = combined.slice(5, 11);
+  const bottomGrid = combined.slice(5, 5 + visibleBottomCount);
 
   // Fallback sidebar handlers
   const sidebarList = activeTab === "latest" 
-    ? DEFAULT_SIDEBAR_LATEST 
+    ? (articles.length > 0 ? articles.slice(0, 5) : DEFAULT_SIDEBAR_LATEST)
     : (popularArticles.length > 0 ? popularArticles.slice(0, 5) : DEFAULT_SIDEBAR_LATEST);
 
   return (
@@ -416,7 +423,7 @@ export default function LeadNewsGrid({
               </button>
             </div>
 
-            {/* List display with stylized custom Arabic digits prefix */}
+            {/* List display with stylized custom news thumbnails instead of digits */}
             <div className="divide-y divide-gray-100">
               {sidebarList.map((item, index) => (
                 <div
@@ -424,9 +431,15 @@ export default function LeadNewsGrid({
                   onClick={() => item.id.startsWith("side") ? null : onSelectArticle(item.id)}
                   className="flex gap-3 py-3.5 first:pt-1 last:pb-0 cursor-pointer group"
                 >
-                  <span className="font-serif text-[28px] font-black text-slate-300 w-8 text-center shrink-0 leading-none group-hover:text-red-700 transition-colors pt-0.5">
-                    {BENGALI_NUMBERS[index + 1] || toBengaliDigits(index + 1)}
-                  </span>
+                  {/* Thumbnail Image instead of serial number */}
+                  <div className="w-20 aspect-[4/3] overflow-hidden shrink-0 bg-gray-50 rounded-sm border border-gray-100/60 shadow-sm">
+                    <img
+                      src={(item.images && item.images[0]) || "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=400&q=80"}
+                      alt={item.title}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-102"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
                   <div className="flex-1 space-y-1">
                     <h4 className="text-[13px] md:text-[14px] font-display font-bold text-gray-900 group-hover:text-[#8c1d1d] transition-colors line-clamp-2 leading-snug">
                       {item.title}
@@ -479,6 +492,19 @@ export default function LeadNewsGrid({
             </div>
           ))}
         </div>
+
+        {/* 'আরো দেখুন' (Load More) button centered beautifully beneath the news blocks */}
+        {combined.length > 5 + visibleBottomCount && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={() => setVisibleBottomCount((prev) => prev + 6)}
+              className="px-6 py-2.5 border border-gray-300 hover:border-red-700 text-gray-700 hover:text-red-700 bg-white font-display font-black text-sm rounded-md transition-all duration-300 flex items-center gap-2 shadow-2xs cursor-pointer hover:shadow-xs"
+            >
+              <span>আরো দেখুন</span>
+              <ChevronDown size={16} />
+            </button>
+          </div>
+        )}
       </div>
       
     </div>
