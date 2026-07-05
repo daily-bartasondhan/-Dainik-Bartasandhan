@@ -167,6 +167,8 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
   // Active selected staff member for ID Card Preview
   const [previewStaff, setPreviewStaff] = useState<Staff | null>(null);
+  const [showIdCardModal, setShowIdCardModal] = useState(false);
+  const [idCardStaff, setIdCardStaff] = useState<Staff | null>(null);
 
   // Review editing modal state
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
@@ -838,6 +840,44 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
   const [postAuthorId, setPostAuthorId] = useState("online_desk");
   const [postAuthorName, setPostAuthorName] = useState("অনলাইন ডেস্ক");
   const [postAuthorMobile, setPostAuthorMobile] = useState("");
+
+  // Computed active/eligible staff and portal users for the Staff & ID Cards list
+  const combinedStaffList = useMemo(() => {
+    const list: Staff[] = [...staffList];
+    portalUsers.forEach((u) => {
+      // Check if this user already exists in staffList by userId, email or name
+      const alreadyExists = staffList.some(
+        (st) => 
+          (st.userId && u.id && st.userId.toLowerCase() === String(u.id).toLowerCase()) || 
+          (st.email && u.email && st.email.toLowerCase() === u.email.toLowerCase()) ||
+          (st.name && u.name && st.name.toLowerCase() === u.name.toLowerCase())
+      );
+      if (!alreadyExists) {
+        list.push({
+          userId: u.id || `user_${u.email?.split('@')[0] || Date.now()}`,
+          passwordHash: "",
+          staffId: u.id || `U-${101 + list.length}`,
+          name: u.name,
+          email: u.email || "",
+          mobile: u.phone || "",
+          fatherName: "",
+          motherName: "",
+          nid: "",
+          presentAddress: "",
+          permanentAddress: "",
+          designation: u.role || "User",
+          status: u.status === "Suspended" ? "Suspended" : "Active",
+          createdAt: u.joinedDate || "7 Jun 2026 , 12:00 PM",
+          author: u.role === "Reporter" || u.role === "Editor" || u.role === "Contributor" ? "Yes" : "No",
+          autoApprovePost: "No",
+          authorCity: "",
+          authorAddress: "",
+          picture: u.picture || ""
+        });
+      }
+    });
+    return list;
+  }, [staffList, portalUsers]);
 
   // Computed active/eligible authors list based on staffList and portalUsers
   const eligibleAuthors = useMemo(() => {
@@ -4727,15 +4767,15 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                       <th className="px-4 py-3 text-left w-12">
                         <input
                           type="checkbox"
-                          checked={selectedStaffRows.length === staffList.filter((st) => {
+                          checked={selectedStaffRows.length === combinedStaffList.filter((st) => {
                             const query = staffSearchQuery.toLowerCase();
                             return st.name.toLowerCase().includes(query) || (st.email && st.email.toLowerCase().includes(query)) || st.mobile.includes(query);
-                          }).length && staffList.filter((st) => {
+                          }).length && combinedStaffList.filter((st) => {
                             const query = staffSearchQuery.toLowerCase();
                             return st.name.toLowerCase().includes(query) || (st.email && st.email.toLowerCase().includes(query)) || st.mobile.includes(query);
                           }).length > 0}
                           onChange={(e) => {
-                            const filtered = staffList.filter((st) => {
+                            const filtered = combinedStaffList.filter((st) => {
                               const query = staffSearchQuery.toLowerCase();
                               return st.name.toLowerCase().includes(query) || (st.email && st.email.toLowerCase().includes(query)) || st.mobile.includes(query);
                             });
@@ -4768,10 +4808,10 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                       </th>
                     </tr>
                   </thead>
-
+ 
                   {/* Table Body */}
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {staffList.filter((st) => {
+                    {combinedStaffList.filter((st) => {
                       const query = staffSearchQuery.toLowerCase();
                       return (
                         st.name.toLowerCase().includes(query) ||
@@ -4781,7 +4821,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                         st.staffId.includes(query)
                       );
                     }).length > 0 ? (
-                      staffList.filter((st) => {
+                      combinedStaffList.filter((st) => {
                         const query = staffSearchQuery.toLowerCase();
                         return (
                           st.name.toLowerCase().includes(query) ||
@@ -4792,10 +4832,10 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                         );
                       }).map((st, index) => {
                         // Calculate SL number starting from staff length down to 1
-                        const slNo = st.staffId || (staffList.length - index).toString();
+                        const slNo = st.staffId || (combinedStaffList.length - index).toString();
                         const defaultDate = st.createdAt || "7 Jun 2026 , 12:00 PM";
                         const isChecked = selectedStaffRows.includes(st.userId);
-
+ 
                         return (
                           <tr key={st.userId} className="hover:bg-slate-50 transition-colors">
                             {/* Checkbox */}
@@ -4813,17 +4853,17 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                                 className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                               />
                             </td>
-
+ 
                             {/* SL (Serial Number) */}
                             <td className="px-4 py-4 whitespace-nowrap text-left text-sm font-semibold text-slate-850">
                               {slNo}
                             </td>
-
+ 
                             {/* Date */}
                             <td className="px-4 py-4 text-left text-xs text-gray-700 max-w-[120px]">
                               {defaultDate}
                             </td>
-
+ 
                             {/* Name / Email / Phone */}
                             <td className="px-4 py-4 text-left">
                               <div className="flex flex-col gap-0.5">
@@ -4836,12 +4876,12 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                                 )}
                               </div>
                             </td>
-
+ 
                             {/* Role */}
                             <td className="px-4 py-4 whitespace-nowrap text-left text-xs font-semibold text-slate-700">
                               {st.designation || "User"}
                             </td>
-
+ 
                             {/* Author */}
                             <td className="px-4 py-4 whitespace-nowrap text-left">
                               <span className={`px-2.5 py-1 text-xs font-bold rounded-md ${
@@ -4852,7 +4892,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                                 {st.author || "No"}
                               </span>
                             </td>
-
+ 
                             {/* Actions with identical button design stacked vertically */}
                             <td className="px-4 py-4 whitespace-nowrap text-left">
                               <div className="flex flex-col gap-1.5 w-24">
@@ -4863,6 +4903,15 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                                   className="w-full bg-[#15803d] hover:bg-[#166534] text-white text-[10px] font-black py-1 px-3 rounded uppercase shadow-sm tracking-wider transition-all cursor-pointer text-center"
                                 >
                                   LOGIN
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setIdCardStaff(st);
+                                    setShowIdCardModal(true);
+                                  }}
+                                  className="w-full bg-indigo-650 hover:bg-indigo-700 text-white text-[10px] font-black py-1 px-3 rounded uppercase shadow-sm tracking-wider transition-all cursor-pointer text-center"
+                                >
+                                  ID CARD
                                 </button>
                                 <button
                                   onClick={() => {
@@ -5185,6 +5234,118 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                       </button>
                     </div>
                   </form>
+                </div>
+              </div>
+            )}
+
+            {/* VIEW STAFF/USER ID CARD MODAL */}
+            {showIdCardModal && idCardStaff && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden transform scale-100 transition-all font-sans p-6 text-center space-y-4">
+                  {/* Modal Header */}
+                  <div className="flex justify-between items-center border-b pb-3">
+                    <h3 className="text-sm font-bold text-slate-800">কর্মীর অফিশিয়াল আইডি কার্ড</h3>
+                    <button
+                      onClick={() => {
+                        setShowIdCardModal(false);
+                        setIdCardStaff(null);
+                      }}
+                      className="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer font-sans"
+                    >
+                      &times;
+                    </button>
+                  </div>
+
+                  {/* Press ID Card Preview Container */}
+                  <div className="bg-gradient-to-br from-[#1e3a8a] to-slate-900 text-white rounded-lg p-5 border border-slate-850 shadow-xl space-y-4 relative overflow-hidden font-sans text-left mx-auto w-full max-w-xs">
+                    <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-36 h-36 bg-blue-700/10 rounded-full"></div>
+                    
+                    {/* Top company/newspaper logos */}
+                    <div className="flex justify-between items-center border-b border-white/20 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 flex items-center justify-center bg-red-650 rounded-full font-display font-black text-xs text-white">
+                          বা
+                        </div>
+                        <div className="leading-none">
+                          <h5 className="text-[10px] font-black font-display uppercase text-red-400">বার্তাসন্ধান</h5>
+                          <p className="text-[7px] tracking-[0.1em] uppercase font-mono text-gray-300">Newspaper Group</p>
+                        </div>
+                      </div>
+                      <span className="text-[8px] bg-red-650 uppercase font-black px-1.5 py-0.5 rounded text-white tracking-widest">
+                        PRESS
+                      </span>
+                    </div>
+
+                    {/* ID card focus components */}
+                    <div className="flex gap-4 pt-1 text-xs">
+                      <div className="w-20 h-24 bg-white/10 rounded border border-white/10 flex flex-col justify-center items-center text-center p-1 shrink-0 overflow-hidden relative">
+                        {idCardStaff.picture ? (
+                          <img
+                            src={idCardStaff.picture}
+                            alt="ID Photo"
+                            className="w-full h-full object-cover rounded"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <>
+                            <div className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-xs mb-1">
+                              {idCardStaff.name ? idCardStaff.name.charAt(0) : "P"}
+                            </div>
+                            <span className="block text-[7px] text-green-400 font-bold border border-green-500/30 px-1 mt-1 rounded font-display bg-green-500/10 animate-pulse">
+                              সক্রিয়
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex-1 space-y-1.5">
+                        <div>
+                          <span className="text-[8px] text-gray-400 block font-display leading-none font-sans">কর্মী নাম</span>
+                          <strong className="text-xs font-display font-black text-white">{idCardStaff.name || "রিপোর্টার নাম"}</strong>
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-gray-400 block font-display leading-none font-sans">পদবি</span>
+                          <strong className="font-display text-blue-300 text-[11px] font-bold">{idCardStaff.designation || "স্টাফ রিপোর্টার"}</strong>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 text-[9px]">
+                          <div>
+                            <span className="text-[7px] text-gray-400 block font-display font-sans">আইডি নম্বর</span>
+                            <span className="font-mono text-gray-200">{idCardStaff.staffId || "S-101"}</span>
+                          </div>
+                          <div>
+                            <span className="text-[7px] text-gray-400 block font-display font-sans">মোবাইল</span>
+                            <span className="font-mono text-gray-200">{idCardStaff.mobile || "—"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/10 flex justify-between items-center text-[8px] text-gray-400 font-mono">
+                      <span>EXP: 31 DEC 2028</span>
+                      <span className="font-display text-[8px] text-right italic text-red-400/80 font-sans">Authorized Editor Sign</span>
+                    </div>
+                  </div>
+
+                  {/* Actions buttons */}
+                  <div className="flex gap-3 justify-center pt-3 border-t">
+                    <button
+                      onClick={() => {
+                        window.print();
+                      }}
+                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition-all shadow-xs cursor-pointer font-sans"
+                    >
+                      প্রিন্ট করুন (Print Card)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowIdCardModal(false);
+                        setIdCardStaff(null);
+                      }}
+                      className="px-4 py-1.5 border border-gray-300 rounded text-xs text-slate-700 hover:bg-gray-100 font-bold transition-all cursor-pointer font-sans"
+                    >
+                      বন্ধ করুন (Close)
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
