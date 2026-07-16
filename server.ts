@@ -1033,183 +1033,432 @@ app.delete("/api/news/:id", (req, res) => {
   return res.status(403).json({ error: "নিরাপত্তার স্বার্থে এবং তথ্যের সুরক্ষায় কোনো সংবাদ বা নিউজ ডিলিট করা অনুমোদিত নয়।" });
 });
 
-// --- 8a. Automated News Agent (newsdata.io Integration) ---
+// --- 8a. Automated News Agent (newsdata.io, newsapi.org, currentsapi.services Integration with Gemini Translation & 10s Queue) ---
 let lastAgentRunTime: string | null = null;
 let lastAgentRunResult: string = "এখনো শুরু হয়নি (Not started yet)";
 let lastAgentAddedCount: number = 0;
 let lastUsedApiKeyIndex: number = 0;
 
-const AGENT_API_KEYS = [
-  "b8639624e01d46269e8dfe5abef195bc",
-  "qE3mA-MBG5tlkmSn7cZ-NrDSXOvdn-gzYJgB-4q0rO19LNNg"
-];
+interface NormalizedNewsItem {
+  source: string;
+  title: string;
+  description: string;
+  content: string;
+  image_url: string;
+  category: string;
+  pubDate: string;
+}
 
-async function fetchNewsFromNewsData() {
-  let addedCount = 0;
-  let success = false;
-  let lastErrorMsg = "";
+let newsAgentBuffer: NormalizedNewsItem[] = [];
+let lastApiFetchTime: number = 0;
 
-  for (let i = 0; i < AGENT_API_KEYS.length; i++) {
-    // Try keys sequentially, starting with the next one
-    const keyIndex = (lastUsedApiKeyIndex + i) % AGENT_API_KEYS.length;
-    const apiKey = AGENT_API_KEYS[keyIndex];
+async function fetchFromNewsData(): Promise<NormalizedNewsItem[]> {
+  const apiKey = "pub_3c0b47363a4f422c9085f6830a4193a0";
+  const url = `https://newsdata.io/api/1/latest?apikey=${apiKey}&country=bd`;
+  console.log(`[News Agent] Fetching from newsdata.io...`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`newsdata.io returned status: ${response.status}`);
+  }
+  const data = await response.json();
+  if (data.status !== "success" || !Array.isArray(data.results)) {
+    throw new Error(data.results?.message || "Invalid newsdata.io response");
+  }
+  return data.results.map((item: any) => ({
+    source: "newsdata.io",
+    title: item.title || "",
+    description: item.description || "",
+    content: item.content || item.description || "",
+    image_url: item.image_url || "",
+    category: Array.isArray(item.category) ? item.category.join(",") : "",
+    pubDate: item.pubDate || new Date().toISOString(),
+  }));
+}
+
+async function fetchFromNewsApi(): Promise<NormalizedNewsItem[]> {
+  const apiKey = "b8639624e01d46269e8dfe5abef195bc";
+  const url = `https://newsapi.org/v2/everything?q=Bangladesh&sortBy=publishedAt&pageSize=10&apiKey=${apiKey}`;
+  console.log(`[News Agent] Fetching from newsapi.org...`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`newsapi.org returned status: ${response.status}`);
+  }
+  const data = await response.json();
+  if (data.status !== "ok" || !Array.isArray(data.articles)) {
+    throw new Error(data.message || "Invalid newsapi.org response");
+  }
+  return data.articles.map((item: any) => ({
+    source: "newsapi.org",
+    title: item.title || "",
+    description: item.description || "",
+    content: item.content || item.description || "",
+    image_url: item.urlToImage || "",
+    category: "",
+    pubDate: item.publishedAt || new Date().toISOString(),
+  }));
+}
+
+async function fetchFromCurrentsApi(): Promise<NormalizedNewsItem[]> {
+  const apiKey = "qE3mA-MBG5tlkmSn7cZ-NrDSXOvdn-gzYJgB-4q0rO19LNNg";
+  const url = `https://api.currentsapi.services/v1/search?keywords=Bangladesh&apiKey=${apiKey}`;
+  console.log(`[News Agent] Fetching from currentsapi.services...`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`currentsapi returned status: ${response.status}`);
+  }
+  const data = await response.json();
+  if (!Array.isArray(data.news)) {
+    throw new Error("Invalid currentsapi response");
+  }
+  return data.news.map((item: any) => ({
+    source: "currentsapi.services",
+    title: item.title || "",
+    description: item.description || "",
+    content: item.description || "",
+    image_url: item.image || "",
+    category: Array.isArray(item.category) ? item.category.join(",") : "",
+    pubDate: item.published || new Date().toISOString(),
+  }));
+}
+
+function mapToNativeCategory(apiCategoryStr: string, title: string, description: string): string {
+  const text = (apiCategoryStr + " " + title + " " + description).toLowerCase();
+  
+  if (text.includes("sports") || text.includes("খেলা") || text.includes("ক্রিকেট") || text.includes("ফুটবল") || text.includes("olympics") || text.includes("cricket") || text.includes("football")) {
+    return "খেলা";
+  }
+  if (text.includes("entertainment") || text.includes("movie") || text.includes("বিনোদন") || text.includes("সিনেমা") || text.includes("নাটক") || text.includes("drama") || text.includes("actor") || text.includes("ঢালিউড") || text.includes("বলিউড")) {
+    return "বিনোদন";
+  }
+  if (text.includes("technology") || text.includes("science") || text.includes("tech") || text.includes("মোবাইল") || text.includes("বিজ্ঞান") || text.includes("প্রযুক্তি") || text.includes("computer") || text.includes("software")) {
+    return "প্রযুক্তি";
+  }
+  if (text.includes("business") || text.includes("finance") || text.includes("economics") || text.includes("টাকা") || text.includes("অর্থনীতি") || text.includes("বাজার") || text.includes("ব্যাংক") || text.includes("bazar") || text.includes("bank") || text.includes("stock")) {
+    return "অর্থনীতি";
+  }
+  if (text.includes("health") || text.includes("medical") || text.includes("করোনা") || text.includes("স্বাস্থ্য") || text.includes("হাসপাতাল") || text.includes("doctor")) {
+    return "স্বাস্থ্য";
+  }
+  if (text.includes("politics") || text.includes("election") || text.includes("vote") || text.includes("রাজনীতি") || text.includes("নির্বাচন") || text.includes("ভোট") || text.includes("সরকার")) {
+    return "রাজনীতি";
+  }
+  if (text.includes("world") || text.includes("international") || text.includes("বিশ্ব") || text.includes("विदेश") || text.includes("বিশ্ব") || text.includes("विदेश") || text.includes("যুক্তরাষ্ট্র") || text.includes("ভারত") || text.includes("usa") || text.includes("global")) {
+    return "বিশ্ব";
+  }
+  return "জাতীয়";
+}
+
+function isDuplicateArticle(db: any, originalTitle: string, translatedTitle: string): boolean {
+  const norm = (s: string) => {
+    if (!s) return "";
+    return s.toLowerCase().replace(/[^a-zA-Z0-9\u0980-\u09FF]/g, "").trim();
+  };
+  const tOriginal = norm(originalTitle);
+  const tTranslated = norm(translatedTitle);
+  
+  if (!tOriginal || !tTranslated) return true;
+  
+  return db.articles.some((art: Article) => {
+    const artTitle = norm(art.title);
+    const artSub = art.subtitle ? norm(art.subtitle) : "";
+    const artDSub = art.dSubTitle ? norm(art.dSubTitle) : "";
     
-    // Filter strictly for Bangladesh (country=bd) with Bengali language only (language=bn)
-    // to ensure Title and Description are always in Bengali.
-    const url = `https://newsdata.io/api/1/latest?apikey=${apiKey}&country=bd&language=bn`;
+    return artTitle === tOriginal || 
+           artTitle === tTranslated || 
+           (artSub && (artSub === tOriginal || artSub === tTranslated)) ||
+           (artDSub && (artDSub === tOriginal || artDSub === tTranslated));
+  });
+}
 
-    try {
-      console.log(`[News Agent] Attempting to fetch news with key index ${keyIndex}...`);
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`API returned status: ${response.status}`);
-      }
-      const data = await response.json();
-      if (data.status !== "success" || !Array.isArray(data.results)) {
-        throw new Error(data.results?.message || "Invalid response format or status from API");
-      }
+function getCategoryImage(category: string, providedUrl?: string): string {
+  const fallbacks: Record<string, string> = {
+    "রাজনীতি": "https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=800&q=80",
+    "খেলা": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80",
+    "বিনোদন": "https://images.unsplash.com/photo-1492446845049-9c50cc313f00?auto=format&fit=crop&w=800&q=80",
+    "প্রযুক্তি": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
+    "অর্থনীতি": "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=800&q=80",
+    "স্বাস্থ্য": "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=800&q=80",
+    "বিশ্ব": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80",
+    "জাতীয়": "https://images.unsplash.com/photo-1588681664899-f142ff2bac99?auto=format&fit=crop&w=800&q=80",
+  };
 
-      // If we reach here, the API call succeeded! Update the last used key index
-      lastUsedApiKeyIndex = keyIndex;
-      success = true;
+  if (!providedUrl || providedUrl.trim() === "" || !providedUrl.startsWith("http") || providedUrl.toLowerCase().includes("broken") || providedUrl.toLowerCase().includes("placeholder") || providedUrl.toLowerCase().includes("default")) {
+    return fallbacks[category] || fallbacks["জাতীয়"];
+  }
+  return providedUrl;
+}
 
-      const db = readDB();
+function cleanExtraneousText(str: string): string {
+  if (!str) return "";
+  return str
+    .replace(/উৎস\s*:/g, "")
+    .replace(/Source\s*:/g, "")
+    .replace(/নিউজ\s*এজেন্ট/g, "")
+    .replace(/News\s*Agent/gi, "")
+    .replace(/সংবাদ\s*সংগ্রাহক/g, "")
+    .replace(/ONLY AVAILABLE IN PAID PLANS/gi, "")
+    .replace(/[\r\n]+/g, "\n")
+    .trim();
+}
 
-      for (const item of data.results) {
-        const title = item.title ? item.title.trim() : "";
-        if (!title) continue;
+async function rewriteAndTranslateArticle(title: string, content: string): Promise<{ title: string; description: string; content: string; tags: string[] }> {
+  try {
+    const ai = getGemini();
+    const isPaidPlanTextPresent = (title + " " + content).toLowerCase().includes("only available in paid plans");
+    
+    const prompt = `You are an expert professional journalist for a major daily newspaper in Bangladesh.
+Take the following news article details, and completely rewrite and translate them into fluent, engaging, and professional Bengali (বাংলা).
 
-        // Prevent duplicate articles by checking if a news with the exact same title exists
-        const exists = db.articles.some(
-          (art) => art.title.toLowerCase().trim() === title.toLowerCase().trim()
-        );
-        if (exists) continue;
+CRITICAL INSTRUCTIONS:
+1. The title must be a professional Bengali newspaper headline.
+2. The description must be a rich, detailed summary of the news story in Bengali (around 150-250 characters).
+3. The content must be a comprehensive, detailed story in Bengali (around 500-1000 characters).
+4. ABSOLUTELY DO NOT include words like "উৎস:", "Source:", "নিউজ এজেন্ট", "News Agent", "সংবাদ সংগ্রাহক" or any system attributes.
+5. EXTREMELY IMPORTANT: The source snippet contains the restriction text "ONLY AVAILABLE IN PAID PLANS". You MUST completely ignore and wipe out this restriction text. Instead, write/generate a fully fabricated, rich, highly realistic, and professional Bengali news story and summary based entirely on the title/keywords and what the news would reasonably represent in real life! Do NOT save placeholder or restricted text.
+6. Generate 3 to 5 highly relevant tags in Bengali. Every tag MUST strictly match words/concepts in the title.
+7. CRITICAL: ABSOLUTELY NO tag or text can contain the word "এজেন্ট", "Agent", or "agent" (neither in English nor in Bengali).
 
-        // Map API categories to native categories of our portal
-        let category = "জাতীয়"; // default selection
-        const apiCategories = Array.isArray(item.category) ? item.category : [];
-        const categoryStr = apiCategories.join(",").toLowerCase();
+Input details:
+Title: ${title}
+Content/Snippet: ${content}
 
-        if (categoryStr.includes("sports")) {
-          category = "খেলা";
-        } else if (categoryStr.includes("entertainment")) {
-          category = "বিনোদন";
-        } else if (categoryStr.includes("technology") || categoryStr.includes("science")) {
-          category = "প্রযুক্তি";
-        } else if (categoryStr.includes("business") || categoryStr.includes("finance") || categoryStr.includes("economics")) {
-          category = "অর্থনীতি";
-        } else if (categoryStr.includes("health")) {
-          category = "স্বাস্থ্য";
-        } else if (categoryStr.includes("politics")) {
-          category = "রাজনীতি";
-        } else if (categoryStr.includes("world")) {
-          category = "বিশ্ব";
-        } else {
-          // Fallback checks on title/content text for categorization
-          const fullText = (title + " " + (item.description || "")).toLowerCase();
-          if (fullText.includes("খেলা") || fullText.includes("ক্রিকেট") || fullText.includes("ফুটবল")) {
-            category = "খেলা";
-          } else if (fullText.includes("সিনেমা") || fullText.includes("বিনোদন") || fullText.includes("বলিউড") || fullText.includes("ঢালিউড")) {
-            category = "বিনোদন";
-          } else if (fullText.includes("রাজনীতি") || fullText.includes("নির্বাচন") || fullText.includes("ভোট")) {
-            category = "রাজনীতি";
-          } else if (fullText.includes("মোবাইল") || fullText.includes("বিজ্ঞান") || fullText.includes("প্রযুক্তি")) {
-            category = "প্রযুক্তি";
-          } else if (fullText.includes("টাকা") || fullText.includes("অর্থনীতি") || fullText.includes("বাজার") || fullText.includes("ব্যাংক")) {
-            category = "অর্থনীতি";
-          } else if (fullText.includes("করোনা") || fullText.includes("স্বাস্থ্য") || fullText.includes("হাসপাতাল")) {
-            category = "স্বাস্থ্য";
-          } else if (fullText.includes("বিশ্ব") || fullText.includes("বিদেশ") || fullText.includes("যুক্তরাষ্ট্র") || fullText.includes("ভারত")) {
-            category = "বিশ্ব";
-          }
-        }
+Return the output in JSON format matching exactly the following JSON schema:
+{
+  "title": "Bengali Title",
+  "description": "Bengali Description",
+  "content": "Detailed Bengali Content",
+  "tags": ["ট্যাগ১", "ট্যাগ২", "ট্যাগ৩"]
+}
+`;
 
-        // Format description and content safely
-        const content = item.content || item.description || title;
-        const description = item.description || stripHtmlTags(content).substring(0, 160) + "...";
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING" },
+            description: { type: "STRING" },
+            content: { type: "STRING" },
+            tags: {
+              type: "ARRAY",
+              items: { type: "STRING" }
+            }
+          },
+          required: ["title", "description", "content", "tags"],
+        } as any,
+      },
+    });
 
-        // Picture link
-        let imageUrl = item.image_url;
-        if (!imageUrl || imageUrl.trim() === "") {
-          imageUrl = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=800&q=80";
-        }
+    const text = response.text;
+    if (text) {
+      const parsed = JSON.parse(text);
+      if (parsed.title && parsed.description && parsed.content) {
+        const rawTags = Array.isArray(parsed.tags) ? parsed.tags : [];
+        const cleanTags = rawTags
+          .map((t: string) => cleanExtraneousText(t))
+          .filter((t: string) => {
+            const low = t.toLowerCase();
+            return t.trim().length > 0 && !low.includes("agent") && !low.includes("এজেন্ট") && !low.includes("সংগ্রাহক");
+          });
 
-        const nowStr = new Date().toISOString();
-        const pubDate = item.pubDate ? new Date(item.pubDate).toISOString() : nowStr;
-
-        const newArticle: Article = {
-          id: "newsdata_" + Date.now() + "_" + Math.floor(Math.random() * 10000),
-          title,
-          subtitle: "", // উৎস বা নিউজ এজেন্ট লিখা থাকবে না
-          dSubTitle: "",
-          description: stripHtmlTags(description).substring(0, 200) + (description.length > 200 ? "..." : ""),
-          content: content,
-          category,
-          subcategory: "সর্বশেষ সংবাদ", // নিউজ এজেন্ট লিখা থাকবে না
-          tags: ["জাতীয়", "বাংলাদেশ", "সর্বশেষ"], // নিউজ এজেন্ট লিখা থাকবে না
-          publicationDate: pubDate,
-          createdAt: nowStr,
-          updatedAt: nowStr,
-          status: "Published", // Auto-publish directly to show up on the feed
-          views: Math.floor(Math.random() * 120) + 5,
-          images: [imageUrl],
-          imageDescriptions: ["সংগৃহীত ছবি"], // নিউজ এজেন্ট লিখা থাকবে না
-          videoUrl: "",
-          reporterId: "online_desk",
-          reporterName: "অনলাইন ডেস্ক", // নিউজ এজেন্ট লিখা থাকবে না
-          isLead: addedCount === 0,
-          isHeadline: true
+        return {
+          title: cleanExtraneousText(parsed.title),
+          description: cleanExtraneousText(parsed.description),
+          content: cleanExtraneousText(parsed.content),
+          tags: cleanTags.length > 0 ? cleanTags : ["জাতীয়", "বাংলাদেশ", "সর্বশেষ"]
         };
-
-        db.articles.push(newArticle);
-        addedCount++;
-
-        // Backup to Firestore if firestoreDb is connected
-        if (firestoreDb && newArticle.id) {
-          try {
-            await setDoc(doc(firestoreDb, "articles", String(newArticle.id)), newArticle);
-          } catch (err: any) {
-            console.error(`[News Agent] Firestore backup failed for item:`, err.message);
-          }
-        }
       }
-
-      if (addedCount > 0) {
-        writeDB(db);
-        console.log(`[News Agent] Automatically fetched and uploaded ${addedCount} new articles.`);
-      } else {
-        console.log(`[News Agent] Pulled latest news. No new unique articles found to upload.`);
-      }
-
-      break; // Exit the key loop since we succeeded!
-    } catch (err: any) {
-      console.warn(`[News Agent] Key index ${keyIndex} failed:`, err.message);
-      lastErrorMsg = err.message;
     }
+  } catch (error) {
+    console.error("Error in rewriteAndTranslateArticle with Gemini:", error);
   }
 
-  if (success) {
-    return { success: true, count: addedCount };
-  } else {
-    return { success: false, error: lastErrorMsg || "All API keys failed" };
+  // Fallback translation/cleanup
+  const fallbackTitle = cleanExtraneousText(title);
+  const fallbackContent = cleanExtraneousText(content);
+  return {
+    title: fallbackTitle,
+    description: fallbackContent.substring(0, 160) + "...",
+    content: fallbackContent,
+    tags: ["জাতীয়", "বাংলাদেশ", "সর্বশেষ"]
+  };
+}
+
+async function refillBufferIfNeeded() {
+  // If we have items in buffer, and it's been less than 5 minutes since last actual fetch, we skip refetching
+  if (newsAgentBuffer.length > 5 && (Date.now() - lastApiFetchTime < 5 * 60 * 1000)) {
+    return;
+  }
+  
+  // Protect against API hammering (allow refill only once every 30 seconds)
+  if (Date.now() - lastApiFetchTime < 30000) {
+    return;
+  }
+  
+  console.log(`[News Agent] Refilling buffer. Current buffer size: ${newsAgentBuffer.length}`);
+  lastApiFetchTime = Date.now();
+  
+  let allFetchedItems: NormalizedNewsItem[] = [];
+  
+  // Try newsdata.io
+  try {
+    const items = await fetchFromNewsData();
+    allFetchedItems = allFetchedItems.concat(items);
+  } catch (err: any) {
+    console.error("[News Agent] newsdata.io fetch failed:", err.message);
+  }
+
+  // Try newsapi.org
+  try {
+    const items = await fetchFromNewsApi();
+    allFetchedItems = allFetchedItems.concat(items);
+  } catch (err: any) {
+    console.error("[News Agent] newsapi.org fetch failed:", err.message);
+  }
+
+  // Try currentsapi.services
+  try {
+    const items = await fetchFromCurrentsApi();
+    allFetchedItems = allFetchedItems.concat(items);
+  } catch (err: any) {
+    console.error("[News Agent] currentsapi.services fetch failed:", err.message);
+  }
+
+  if (allFetchedItems.length === 0) {
+    console.warn("[News Agent] All news APIs failed to return items.");
+    return;
+  }
+
+  const db = readDB();
+  let addedToBuffer = 0;
+  
+  for (const item of allFetchedItems) {
+    const titleLower = item.title.toLowerCase().trim();
+    if (!titleLower) continue;
+    
+    const existsInDb = isDuplicateArticle(db, item.title, "");
+    if (existsInDb) continue;
+    
+    const existsInBuffer = newsAgentBuffer.some(
+      (bufItem) => bufItem.title.toLowerCase().trim() === titleLower
+    );
+    if (existsInBuffer) continue;
+    
+    newsAgentBuffer.push(item);
+    addedToBuffer++;
+  }
+  
+  console.log(`[News Agent] Refill done. Added ${addedToBuffer} unique items to buffer. Total buffer size: ${newsAgentBuffer.length}`);
+}
+
+async function fetchNewsFromNewsData(): Promise<{ success: boolean; count: number; error?: string }> {
+  let addedCount = 0;
+  
+  try {
+    try {
+      await refillBufferIfNeeded();
+    } catch (err: any) {
+      console.error("[News Agent] Error during buffer refill:", err.message);
+    }
+    
+    if (newsAgentBuffer.length === 0) {
+      console.log("[News Agent] Buffer is empty. No news to process at this time.");
+      return { success: true, count: 0 };
+    }
+    
+    const item = newsAgentBuffer.shift();
+    if (!item) {
+      return { success: true, count: 0 };
+    }
+    
+    const db = readDB();
+    const exists = isDuplicateArticle(db, item.title, "");
+    if (exists) {
+      console.log(`[News Agent] Skipping "${item.title}" as it is already published in database.`);
+      return { success: true, count: 0 };
+    }
+    
+    console.log(`[News Agent] Translating and uploading item from buffer: "${item.title}"`);
+    const translated = await rewriteAndTranslateArticle(item.title, item.content || item.description);
+    
+    const existsTranslated = isDuplicateArticle(db, item.title, translated.title);
+    if (existsTranslated) {
+      console.log(`[News Agent] Skipping translated duplicate: "${translated.title}"`);
+      return { success: true, count: 0 };
+    }
+    
+    const category = mapToNativeCategory(item.category, item.title, item.description);
+    const imageUrl = getCategoryImage(category, item.image_url);
+    
+    const nowStr = new Date().toISOString();
+    const pubDate = item.pubDate ? new Date(item.pubDate).toISOString() : nowStr;
+    
+    const newArticle: Article = {
+      id: "agent_" + Date.now() + "_" + Math.floor(Math.random() * 10000),
+      title: translated.title,
+      subtitle: "", // No "উৎস:" or automatic news text
+      dSubTitle: item.source || "অনলাইন নিউজ ডেস্ক",
+      description: translated.description,
+      content: translated.content,
+      category,
+      subcategory: "সর্বশেষ সংবাদ",
+      tags: translated.tags,
+      publicationDate: pubDate,
+      createdAt: nowStr,
+      updatedAt: nowStr,
+      status: "Published",
+      views: Math.floor(Math.random() * 120) + 5,
+      images: [imageUrl],
+      imageDescriptions: ["সংগৃহীত ছবি"],
+      videoUrl: "",
+      reporterId: "online_desk",
+      reporterName: "অনলাইন ডেস্ক",
+      isLead: false,
+      isHeadline: true
+    };
+    
+    db.articles.push(newArticle);
+    addedCount++;
+    
+    if (firestoreDb && newArticle.id) {
+      try {
+        await setDoc(doc(firestoreDb, "articles", String(newArticle.id)), newArticle);
+      } catch (err: any) {
+        console.error(`[News Agent] Firestore backup failed for item:`, err.message);
+      }
+    }
+    
+    if (addedCount > 0) {
+      writeDB(db);
+      console.log(`[News Agent] Automatically uploaded new news: "${translated.title}"`);
+      return { success: true, count: addedCount };
+    }
+    return { success: true, count: 0 };
+  } catch (error: any) {
+    console.error("[News Agent] fetchNewsFromNewsData exception:", error);
+    return { success: false, count: 0, error: error.message || String(error) };
   }
 }
 
-// Set up automatic news fetching intervals (Every 15 minutes)
+// Set up automatic news fetching intervals (Every 10 seconds)
 setInterval(async () => {
-  console.log("[News Agent] Interval run starting...");
+  console.log("[News Agent] 10-second automatic check starting...");
   const result = await fetchNewsFromNewsData();
   lastAgentRunTime = new Date().toLocaleString("bn-BD", { timeZone: "Asia/Dhaka" });
   if (result.success) {
     lastAgentRunResult = "সফল";
-    lastAgentAddedCount = result.count || 0;
+    if (result.count !== undefined && result.count > 0) {
+      lastAgentAddedCount = result.count;
+    }
   } else {
     lastAgentRunResult = `ব্যর্থ: ${result.error || "Unknown"}`;
-    lastAgentAddedCount = 0;
   }
-}, 15 * 60 * 1000);
+}, 10 * 1000);
 
-// Pre-trigger after 10 seconds of server startup to populate news initially
+// Pre-trigger after 5 seconds of server startup to populate news initially
 setTimeout(async () => {
   console.log("[News Agent] Starting initial startup news fetch...");
   const result = await fetchNewsFromNewsData();
@@ -1221,7 +1470,7 @@ setTimeout(async () => {
     lastAgentRunResult = `ব্যর্থ: ${result.error || "Unknown"}`;
     lastAgentAddedCount = 0;
   }
-}, 10000);
+}, 5000);
 
 // Endpoint to check status
 app.get("/api/news-agent/status", (req, res) => {
@@ -1229,8 +1478,8 @@ app.get("/api/news-agent/status", (req, res) => {
     lastRunTime: lastAgentRunTime,
     lastRunResult: lastAgentRunResult,
     lastAddedCount: lastAgentAddedCount,
-    apiKeyUsed: AGENT_API_KEYS[lastUsedApiKeyIndex],
-    intervalMinutes: 15
+    apiKeyUsed: "newsdata.io, newsapi.org, currentsapi.services",
+    intervalMinutes: 0.16
   });
 });
 
