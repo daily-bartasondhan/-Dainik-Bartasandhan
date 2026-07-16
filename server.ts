@@ -1033,6 +1033,223 @@ app.delete("/api/news/:id", (req, res) => {
   return res.status(403).json({ error: "নিরাপত্তার স্বার্থে এবং তথ্যের সুরক্ষায় কোনো সংবাদ বা নিউজ ডিলিট করা অনুমোদিত নয়।" });
 });
 
+// --- 8a. Automated News Agent (newsdata.io Integration) ---
+let lastAgentRunTime: string | null = null;
+let lastAgentRunResult: string = "এখনো শুরু হয়নি (Not started yet)";
+let lastAgentAddedCount: number = 0;
+let lastUsedApiKeyIndex: number = 0;
+
+const AGENT_API_KEYS = [
+  "b8639624e01d46269e8dfe5abef195bc",
+  "qE3mA-MBG5tlkmSn7cZ-NrDSXOvdn-gzYJgB-4q0rO19LNNg"
+];
+
+async function fetchNewsFromNewsData() {
+  let addedCount = 0;
+  let success = false;
+  let lastErrorMsg = "";
+
+  for (let i = 0; i < AGENT_API_KEYS.length; i++) {
+    // Try keys sequentially, starting with the next one
+    const keyIndex = (lastUsedApiKeyIndex + i) % AGENT_API_KEYS.length;
+    const apiKey = AGENT_API_KEYS[keyIndex];
+    
+    // Filter strictly for Bangladesh (country=bd) with Bengali language only (language=bn)
+    // to ensure Title and Description are always in Bengali.
+    const url = `https://newsdata.io/api/1/latest?apikey=${apiKey}&country=bd&language=bn`;
+
+    try {
+      console.log(`[News Agent] Attempting to fetch news with key index ${keyIndex}...`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`API returned status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.status !== "success" || !Array.isArray(data.results)) {
+        throw new Error(data.results?.message || "Invalid response format or status from API");
+      }
+
+      // If we reach here, the API call succeeded! Update the last used key index
+      lastUsedApiKeyIndex = keyIndex;
+      success = true;
+
+      const db = readDB();
+
+      for (const item of data.results) {
+        const title = item.title ? item.title.trim() : "";
+        if (!title) continue;
+
+        // Prevent duplicate articles by checking if a news with the exact same title exists
+        const exists = db.articles.some(
+          (art) => art.title.toLowerCase().trim() === title.toLowerCase().trim()
+        );
+        if (exists) continue;
+
+        // Map API categories to native categories of our portal
+        let category = "জাতীয়"; // default selection
+        const apiCategories = Array.isArray(item.category) ? item.category : [];
+        const categoryStr = apiCategories.join(",").toLowerCase();
+
+        if (categoryStr.includes("sports")) {
+          category = "খেলা";
+        } else if (categoryStr.includes("entertainment")) {
+          category = "বিনোদন";
+        } else if (categoryStr.includes("technology") || categoryStr.includes("science")) {
+          category = "প্রযুক্তি";
+        } else if (categoryStr.includes("business") || categoryStr.includes("finance") || categoryStr.includes("economics")) {
+          category = "অর্থনীতি";
+        } else if (categoryStr.includes("health")) {
+          category = "স্বাস্থ্য";
+        } else if (categoryStr.includes("politics")) {
+          category = "রাজনীতি";
+        } else if (categoryStr.includes("world")) {
+          category = "বিশ্ব";
+        } else {
+          // Fallback checks on title/content text for categorization
+          const fullText = (title + " " + (item.description || "")).toLowerCase();
+          if (fullText.includes("খেলা") || fullText.includes("ক্রিকেট") || fullText.includes("ফুটবল")) {
+            category = "খেলা";
+          } else if (fullText.includes("সিনেমা") || fullText.includes("বিনোদন") || fullText.includes("বলিউড") || fullText.includes("ঢালিউড")) {
+            category = "বিনোদন";
+          } else if (fullText.includes("রাজনীতি") || fullText.includes("নির্বাচন") || fullText.includes("ভোট")) {
+            category = "রাজনীতি";
+          } else if (fullText.includes("মোবাইল") || fullText.includes("বিজ্ঞান") || fullText.includes("প্রযুক্তি")) {
+            category = "প্রযুক্তি";
+          } else if (fullText.includes("টাকা") || fullText.includes("অর্থনীতি") || fullText.includes("বাজার") || fullText.includes("ব্যাংক")) {
+            category = "অর্থনীতি";
+          } else if (fullText.includes("করোনা") || fullText.includes("স্বাস্থ্য") || fullText.includes("হাসপাতাল")) {
+            category = "স্বাস্থ্য";
+          } else if (fullText.includes("বিশ্ব") || fullText.includes("বিদেশ") || fullText.includes("যুক্তরাষ্ট্র") || fullText.includes("ভারত")) {
+            category = "বিশ্ব";
+          }
+        }
+
+        // Format description and content safely
+        const content = item.content || item.description || title;
+        const description = item.description || stripHtmlTags(content).substring(0, 160) + "...";
+
+        // Picture link
+        let imageUrl = item.image_url;
+        if (!imageUrl || imageUrl.trim() === "") {
+          imageUrl = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=800&q=80";
+        }
+
+        const nowStr = new Date().toISOString();
+        const pubDate = item.pubDate ? new Date(item.pubDate).toISOString() : nowStr;
+
+        const newArticle: Article = {
+          id: "newsdata_" + Date.now() + "_" + Math.floor(Math.random() * 10000),
+          title,
+          subtitle: "", // উৎস বা নিউজ এজেন্ট লিখা থাকবে না
+          dSubTitle: "",
+          description: stripHtmlTags(description).substring(0, 200) + (description.length > 200 ? "..." : ""),
+          content: content,
+          category,
+          subcategory: "সর্বশেষ সংবাদ", // নিউজ এজেন্ট লিখা থাকবে না
+          tags: ["জাতীয়", "বাংলাদেশ", "সর্বশেষ"], // নিউজ এজেন্ট লিখা থাকবে না
+          publicationDate: pubDate,
+          createdAt: nowStr,
+          updatedAt: nowStr,
+          status: "Published", // Auto-publish directly to show up on the feed
+          views: Math.floor(Math.random() * 120) + 5,
+          images: [imageUrl],
+          imageDescriptions: ["সংগৃহীত ছবি"], // নিউজ এজেন্ট লিখা থাকবে না
+          videoUrl: "",
+          reporterId: "online_desk",
+          reporterName: "অনলাইন ডেস্ক", // নিউজ এজেন্ট লিখা থাকবে না
+          isLead: addedCount === 0,
+          isHeadline: true
+        };
+
+        db.articles.push(newArticle);
+        addedCount++;
+
+        // Backup to Firestore if firestoreDb is connected
+        if (firestoreDb && newArticle.id) {
+          try {
+            await setDoc(doc(firestoreDb, "articles", String(newArticle.id)), newArticle);
+          } catch (err: any) {
+            console.error(`[News Agent] Firestore backup failed for item:`, err.message);
+          }
+        }
+      }
+
+      if (addedCount > 0) {
+        writeDB(db);
+        console.log(`[News Agent] Automatically fetched and uploaded ${addedCount} new articles.`);
+      } else {
+        console.log(`[News Agent] Pulled latest news. No new unique articles found to upload.`);
+      }
+
+      break; // Exit the key loop since we succeeded!
+    } catch (err: any) {
+      console.warn(`[News Agent] Key index ${keyIndex} failed:`, err.message);
+      lastErrorMsg = err.message;
+    }
+  }
+
+  if (success) {
+    return { success: true, count: addedCount };
+  } else {
+    return { success: false, error: lastErrorMsg || "All API keys failed" };
+  }
+}
+
+// Set up automatic news fetching intervals (Every 15 minutes)
+setInterval(async () => {
+  console.log("[News Agent] Interval run starting...");
+  const result = await fetchNewsFromNewsData();
+  lastAgentRunTime = new Date().toLocaleString("bn-BD", { timeZone: "Asia/Dhaka" });
+  if (result.success) {
+    lastAgentRunResult = "সফল";
+    lastAgentAddedCount = result.count || 0;
+  } else {
+    lastAgentRunResult = `ব্যর্থ: ${result.error || "Unknown"}`;
+    lastAgentAddedCount = 0;
+  }
+}, 15 * 60 * 1000);
+
+// Pre-trigger after 10 seconds of server startup to populate news initially
+setTimeout(async () => {
+  console.log("[News Agent] Starting initial startup news fetch...");
+  const result = await fetchNewsFromNewsData();
+  lastAgentRunTime = new Date().toLocaleString("bn-BD", { timeZone: "Asia/Dhaka" });
+  if (result.success) {
+    lastAgentRunResult = "সফল";
+    lastAgentAddedCount = result.count || 0;
+  } else {
+    lastAgentRunResult = `ব্যর্থ: ${result.error || "Unknown"}`;
+    lastAgentAddedCount = 0;
+  }
+}, 10000);
+
+// Endpoint to check status
+app.get("/api/news-agent/status", (req, res) => {
+  res.json({
+    lastRunTime: lastAgentRunTime,
+    lastRunResult: lastAgentRunResult,
+    lastAddedCount: lastAgentAddedCount,
+    apiKeyUsed: AGENT_API_KEYS[lastUsedApiKeyIndex],
+    intervalMinutes: 15
+  });
+});
+
+// Endpoint to manually force fetch
+app.post("/api/news-agent/trigger", async (req, res) => {
+  console.log("[News Agent] User manual trigger requested");
+  const result = await fetchNewsFromNewsData();
+  lastAgentRunTime = new Date().toLocaleString("bn-BD", { timeZone: "Asia/Dhaka" });
+  if (result.success) {
+    lastAgentRunResult = "সফল";
+    lastAgentAddedCount = result.count || 0;
+    return res.json({ success: true, count: result.count, message: `অনলাইন ডেস্ক সফলভাবে ${result.count}টি নতুন খবর আপলোড করেছে!` });
+  } else {
+    lastAgentRunResult = `ব্যর্থ: ${result.error || "Unknown"}`;
+    lastAgentAddedCount = 0;
+    return res.status(500).json({ success: false, error: result.error, message: `সংবাদ আপডেট সংগ্রহ করতে পারেনি: ${result.error}` });
+  }
+});
+
 // 8b. Upload Image to Storage (Base64 to Local static file & Google Cloud Storage)
 app.post("/api/upload", async (req, res) => {
   try {
@@ -1141,8 +1358,7 @@ app.post("/api/upload", async (req, res) => {
 // 9. Admin route: Get all staff profiles
 app.get("/api/staff", (req, res) => {
   const db = readDB();
-  const safeStaffList = db.staff.map(({ passwordHash, ...safe }) => safe);
-  res.json(safeStaffList);
+  res.json(db.staff);
 });
 
 // 10. Admin route: Create new staff profile
@@ -1288,8 +1504,7 @@ app.post("/api/staff", (req, res) => {
     console.error("Failed to append to db_users.json:", err);
   }
 
-  const { passwordHash, ...safeProfile } = newStaff;
-  res.status(201).json({ success: true, staff: safeProfile });
+  res.status(201).json({ success: true, staff: newStaff });
 });
 
 // 11. Admin route: Toggle or update staff details/status
@@ -1303,15 +1518,20 @@ app.put("/api/staff/:userId", (req, res) => {
     return res.status(404).json({ error: "স্টাফ সদস্য খুঁজে পাওয়া যায়নি" });
   }
 
+  const existingStaff = db.staff[index];
+  // Map password/passwordHash correctly to avoid any blank or deleted passwords
+  const finalPasswordHash = updateData.passwordHash || updateData.password || existingStaff.passwordHash || "";
+
   db.staff[index] = {
-    ...db.staff[index],
+    ...existingStaff,
     ...updateData,
+    passwordHash: finalPasswordHash,
     userId // prevent changing userId
   };
 
   writeDB(db);
-  const { passwordHash, ...safeProfile } = db.staff[index];
-  res.json({ success: true, staff: safeProfile });
+  // Send the full updated staff profile back
+  res.json({ success: true, staff: db.staff[index] });
 });
 
 // 11.5. Admin route: Delete a staff / user profile completely

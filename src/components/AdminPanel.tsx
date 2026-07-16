@@ -170,6 +170,17 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
   const [showIdCardModal, setShowIdCardModal] = useState(false);
   const [idCardStaff, setIdCardStaff] = useState<Staff | null>(null);
 
+  // Automated News Agent States
+  const [newsAgentStatus, setNewsAgentStatus] = useState<{
+    lastRunTime: string | null;
+    lastRunResult: string;
+    lastAddedCount: number;
+    apiKeyUsed: string;
+    intervalMinutes: number;
+  } | null>(null);
+  const [isTriggeringAgent, setIsTriggeringAgent] = useState(false);
+  const [agentMessage, setAgentMessage] = useState<string | null>(null);
+
   // Review editing modal state
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
 
@@ -1562,6 +1573,11 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
   }, [cardHolderName, cardHolderRole, cardHolderPhone, cardHolderId, cardHolderPhoto, selectedCardType]);
 
   const loadData = () => {
+    fetch("/api/news-agent/status")
+      .then((res) => res.json())
+      .then((data) => setNewsAgentStatus(data))
+      .catch((err) => console.error("Fetch news agent status failed:", err));
+
     fetch("/api/news?status=all&limit=250")
       .then((res) => res.json())
       .then((data) => setAllArticles(data))
@@ -2564,53 +2580,33 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
           </button>
         </div>
       )}
-      
-      {/* Mobile Top Navigation Head Bar */}
-      <div className="md:hidden bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center z-30">
-        <div className="flex items-center gap-2">
-          <span className="font-sans font-black uppercase text-xs tracking-wider bg-slate-900 text-white px-2.5 py-1 rounded">Control Portal</span>
-          <span className="font-display font-black text-primary-red text-sm">দৈনিক বার্তাসন্ধান</span>
-        </div>
-        <button onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} className="p-1 text-gray-700 hover:text-black">
-          <Menu size={24} />
-        </button>
-      </div>
 
-      {/* LEFT SIDEBAR (Copy of layout from the screenshot) */}
-      <aside className={`w-64 bg-white border-r border-gray-200 flex flex-col justify-between shrink-0 transition-transform duration-300 z-40 md:relative fixed md:translate-x-0 h-screen overflow-y-auto ${
+      {/* SIDEBAR NAVIGATION */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-250 flex flex-col justify-between transform md:transform-none transition-transform duration-300 shadow-lg md:shadow-none md:relative ${
         isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       }`}>
-        {/* Brand Logo and Slogan Header in Left Sidebar */}
-        <div className="px-5 py-4.5 border-b border-gray-150 bg-gray-50/50">
-          <div className="flex flex-col text-left">
-            <span className="font-display font-black text-red-700 text-base lg:text-lg tracking-tight select-none">
-              দৈনিক বার্তা সন্ধান
-            </span>
-            <span className="text-[10px] text-gray-500 font-display mt-0.5 tracking-wide leading-relaxed select-none">
-              সঠিক সংবাদ, সত্যের সন্ধানে প্রতিদিন
-            </span>
+        <div className="flex flex-col flex-1 overflow-y-auto">
+          {/* Sidebar header logo matches screenshot */}
+          <div className="p-4 bg-gradient-to-r from-slate-900 via-slate-800 to-red-800 text-white shadow-sm">
+            <h2 className="text-xs font-sans font-black tracking-widest text-rose-500 uppercase leading-none">EDITOR PANEL</h2>
+            <h3 className="text-sm font-bold font-display mt-1 tracking-wide truncate">দৈনিক বার্তাসন্ধান</h3>
           </div>
-        </div>
 
-        <div className="py-3 flex-1">
-          <nav className="px-3 space-y-1">
+          <nav className="p-3 space-y-1 flex-1">
             {coreSidebarItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-4 py-2.5 text-[13px] font-semibold rounded-md transition-all ${
+                onClick={() => { setActiveTab(item.id); setIsMobileSidebarOpen(false); }}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-md transition-all ${
                   activeTab === item.id
-                    ? "bg-[#2563eb] text-white"
+                    ? "bg-[#2563eb] text-white shadow-sm"
                     : "text-gray-700 hover:bg-gray-150 hover:text-gray-900"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={activeTab === item.id ? "text-white" : "text-gray-400"}>
+                  <div className={activeTab === item.id ? "text-white" : "text-gray-400"}>
                     {item.icon}
-                  </span>
+                  </div>
                   <span>{item.label}</span>
                 </div>
                 {item.badge !== undefined && (
@@ -2625,7 +2621,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
             <div className="pt-2">
               <button
                 onClick={() => setIsManagementExpanded(!isManagementExpanded)}
-                className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-150 rounded-md"
+                className="w-full flex items-center justify-between px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-150 rounded-md"
               >
                 <div className="flex items-center gap-3">
                   <Menu size={18} className="text-gray-400" />
@@ -2756,6 +2752,17 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
             </span>
           </div>
         )}
+      
+        {/* Mobile Top Navigation Head Bar */}
+        <div className="md:hidden bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center z-30">
+          <div className="flex items-center gap-2">
+            <span className="font-sans font-black uppercase text-xs tracking-wider bg-slate-900 text-white px-2.5 py-1 rounded">Control Portal</span>
+            <span className="font-display font-black text-primary-red text-sm">দৈনিক বার্তাসন্ধান</span>
+          </div>
+          <button onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} className="p-1 text-gray-700 hover:text-black">
+            <Menu size={24} />
+          </button>
+        </div>
 
         {/* 1. DASHBOARD OVERVIEW VIEW */}
         {activeTab === "dashboard" && (
@@ -2827,6 +2834,114 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                     </React.Fragment>
                   );
                 })}
+              </div>
+
+              {/* Automated News Agent Control Module */}
+              <div className="mt-8 bg-white border border-slate-200 rounded-lg shadow-sm p-6 font-sans">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                      </span>
+                      <h3 className="text-lg font-bold text-slate-800">অটোমেটিক নিউজ এজেন্ট (newsdata.io Agent)</h3>
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      নিউজ এজেন্ট ব্যাকগ্রাউন্ডে সক্রিয় রয়েছে এবং প্রতি ১৫ মিনিট অন্তর বাংলাদেশ সংক্রান্ত সর্বশেষ খবর স্বয়ংক্রিয়ভাবে আপলোড করছে।
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setIsTriggeringAgent(true);
+                      setAgentMessage(null);
+                      try {
+                        const response = await fetch("/api/news-agent/trigger", { method: "POST" });
+                        const result = await response.json();
+                        setIsTriggeringAgent(false);
+                        if (result.success) {
+                          setAgentMessage(result.message);
+                          // Refresh status & news feeds
+                          loadData();
+                        } else {
+                          setAgentMessage(`ত্রুটি: ${result.message || "সংগ্রহ করা যায়নি"}`);
+                        }
+                      } catch (err: any) {
+                        setIsTriggeringAgent(false);
+                        setAgentMessage(`সংযোগ ত্রুটি: ${err.message}`);
+                      }
+                    }}
+                    disabled={isTriggeringAgent}
+                    className={`px-5 py-2.5 rounded font-bold text-sm tracking-wide text-white transition flex items-center justify-center gap-2 cursor-pointer ${
+                      isTriggeringAgent
+                        ? "bg-slate-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98]"
+                    }`}
+                  >
+                    {isTriggeringAgent ? (
+                      <>
+                        <span className="animate-spin inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                        আপডেট ফেচ করা হচ্ছে...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                          <path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z" />
+                        </svg>
+                        ম্যানুয়ালি আপডেট ফেচ করুন
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {agentMessage && (
+                  <div className={`mt-4 p-3 rounded text-sm font-semibold flex items-center gap-2 ${
+                    agentMessage.includes("ত্রুটি") || agentMessage.includes("সংযোগ")
+                      ? "bg-red-50 text-red-700 border border-red-100"
+                      : "bg-green-50 text-green-700 border border-green-100 animate-fade-in"
+                  }`}>
+                    <span className="text-base">ℹ️</span> {agentMessage}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                  {/* Status Item */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
+                    <span className="text-xs text-slate-400 font-bold uppercase block tracking-wider">রানিং স্ট্যাটাস</span>
+                    <span className="text-lg font-bold text-emerald-600 mt-1 block flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      সক্রিয় (Active)
+                    </span>
+                  </div>
+
+                  {/* Last Run Time */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
+                    <span className="text-xs text-slate-400 font-bold uppercase block tracking-wider">সর্বশেষ ফেচ টাইম</span>
+                    <span className="text-sm font-bold text-slate-700 mt-1 block truncate">
+                      {newsAgentStatus?.lastRunTime || "এখনো রান করা হয়নি"}
+                    </span>
+                  </div>
+
+                  {/* Last Run Count */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
+                    <span className="text-xs text-slate-400 font-bold uppercase block tracking-wider">সর্বশেষ সংযোজিত সংবাদ</span>
+                    <span className="text-lg font-extrabold text-slate-800 mt-1 block">
+                      {newsAgentStatus?.lastAddedCount !== undefined ? `${newsAgentStatus.lastAddedCount} টি` : "০ টি"}
+                    </span>
+                  </div>
+
+                  {/* API Key Status */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
+                    <span className="text-xs text-slate-400 font-bold uppercase block tracking-wider">ব্যবহৃত API Key</span>
+                    <span className="text-xs font-mono font-semibold text-slate-600 mt-1 block truncate select-all" title={newsAgentStatus?.apiKeyUsed}>
+                      {newsAgentStatus?.apiKeyUsed ? `${newsAgentStatus.apiKeyUsed.substring(0, 10)}...` : "pub_3c0b47363a4f422c9085f6830a4193a0"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-5 p-3.5 bg-sky-50 border border-sky-100 rounded-md text-xs text-sky-800 leading-relaxed font-sans">
+                  <strong>তথ্য ও নির্দেশাবলী:</strong> আমাদের এই নিউজ এজেন্টটি সরাসরি <a href="https://newsdata.io" target="_blank" rel="noreferrer" className="underline font-bold text-sky-900 hover:text-sky-950">newsdata.io</a> গেটওয়ে ব্যবহার করে বাংলাদেশের সব প্রথম সারির জাতীয় গণমাধ্যমের রিয়েল-টাইম ডাটা ইন্টিগ্রেট করে। একই নিউজ যেন বারবার পোস্ট না হয়, সেজন্য ডুপ্লিকেট চেকিং মেকানিজম ইন্টিগ্রেট করা হয়েছে।
+                </div>
               </div>
             </div>
           )
@@ -4964,6 +5079,10 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
+                      if (!newUserId.trim()) {
+                        alert("Please fill in User ID / Username *");
+                        return;
+                      }
                       if (!newName) {
                         alert("Please fill in User Name *");
                         return;
@@ -4977,9 +5096,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                         return;
                       }
 
-                      // Generate unique ID based on email prefix
-                      const baseUsername = newUserEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-                      const generatedUserId = baseUsername || "user_" + Date.now();
+                      const generatedUserId = newUserId.trim().toLowerCase();
 
                       fetch("/api/staff", {
                         method: "POST",
@@ -5037,6 +5154,18 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                     }}
                     className="p-6 space-y-4 text-left font-sans"
                   >
+                    {/* User ID / Username */}
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        value={newUserId}
+                        onChange={(e) => setNewUserId(e.target.value)}
+                        placeholder="ইউজার আইডি / Username *"
+                        className="w-full p-2.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans text-sm text-gray-800 placeholder-gray-400 font-semibold"
+                      />
+                    </div>
+
                     {/* User Name */}
                     <div>
                       <input
@@ -5384,8 +5513,20 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
                     }}
                     className="p-6 space-y-4 text-left font-sans"
                   >
+                    {/* User ID */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 font-sans">ইউজার আইডি (User ID) *</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={editingStaffMember.userId || ""}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded font-sans text-sm text-gray-600 cursor-not-allowed"
+                      />
+                    </div>
+
                     {/* User Name */}
                     <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 font-sans">সংবাদকর্মীর নাম (Name) *</label>
                       <input
                         type="text"
                         required
@@ -5398,6 +5539,7 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
                     {/* User Email */}
                     <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 font-sans">ইমেইল (Email) *</label>
                       <input
                         type="email"
                         required
@@ -5410,12 +5552,14 @@ export default function AdminPanel({ onLoginSuccess, activeUser, onNavigateHome 
 
                     {/* User Password */}
                     <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 font-sans">পাসওয়ার্ড (Password) *</label>
                       <input
-                        type="password"
-                        value={editingStaffMember.password || ""}
-                        onChange={(e) => setEditingStaffMember({ ...editingStaffMember, password: e.target.value })}
-                        placeholder="User Password (leave unchanged if preferred)"
-                        className="w-full p-2.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans text-sm text-gray-800 placeholder-gray-400"
+                        type="text"
+                        required
+                        value={editingStaffMember.passwordHash || editingStaffMember.password || ""}
+                        onChange={(e) => setEditingStaffMember({ ...editingStaffMember, password: e.target.value, passwordHash: e.target.value })}
+                        placeholder="User Password *"
+                        className="w-full p-2.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans text-sm text-gray-800 placeholder-gray-400 font-semibold"
                       />
                     </div>
 
