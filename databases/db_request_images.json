@@ -1,0 +1,22 @@
+[
+  {
+    "id": "req-img-101",
+    "title": "ফরিদপুরের ঐতিহাসিক লালন আখড়া প্রাঙ্গণ",
+    "description": "ফরিদপুরের ঐতিহ্যবাহী লালন বিজ্ঞান ও গবেষণা আখড়ার চমৎকার বৈকালিক দৃশ্য।",
+    "category": "চিত্রকলা ও সংস্কৃতি",
+    "imageUrl": "https://images.unsplash.com/photo-1545128485-c400e7702796?auto=format&fit=crop&w=600&q=80",
+    "userName": "শফিকুর রহমান",
+    "userEmail": "shafiq@gmail.com",
+    "date": "2026-06-07T14:20:00Z"
+  },
+  {
+    "id": "req-img-102",
+    "title": "সারাদেশে বর্ষার নতুন সতেজ সাজ",
+    "description": "গ্রাম বাংলার বিস্তীর্ণ ফসলের মাঠে আষাঢ়ের বৃষ্টির চমৎকার জলজ সৌন্দর্য।",
+    "category": "প্রকৃতি ও জীবন",
+    "imageUrl": "https://images.unsplash.com/photo-1508873696983-2df519f0397e?auto=format&fit=crop&w=600&q=80",
+    "userName": "সাদিয়া তাসনিম",
+    "userEmail": "sadia@gmail.com",
+    "date": "2026-06-06T11:05:00Z"
+  }
+]
