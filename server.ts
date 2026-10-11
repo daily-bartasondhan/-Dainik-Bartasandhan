@@ -14,6 +14,7 @@ import { initializeFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDo
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Storage as GcsStorage } from "@google-cloud/storage";
 import xhr2 from "xhr2";
+import { Client as ApitubeClient } from "@apitube/news-api";
 
 (global as any).XMLHttpRequest = xhr2;
 
@@ -524,7 +525,11 @@ function initializeDatabases() {
 // Ensure execution of db creation on boot and restore/backup from Firebase Firestore
 initializeDatabases();
 syncFromFirebase()
-  .then(() => console.log("Initial Firestore-to-Local sync done."))
+  .then(() => {
+    console.log("Initial Firestore-to-Local sync done.");
+    // Run migration to guarantee all news articles have valid descriptions
+    fixMissingDescriptions();
+  })
   .catch((e) => console.error("Initial Firestore sync error:", e));
 
 // Middleware to parse JSON
@@ -542,6 +547,40 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 function stripHtmlTags(html: string): string {
   if (!html) return "";
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Automatically fix empty, null, or extremely short descriptions in existing articles
+function fixMissingDescriptions() {
+  try {
+    const db = readDB();
+    let updatedCount = 0;
+    
+    for (const art of db.articles) {
+      const currentDesc = (art.description || "").trim();
+      // If it is missing, empty, or too short (e.g. less than 15 characters, or just "..."), let's regenerate it
+      if (currentDesc === "" || currentDesc.length < 15 || currentDesc === "...") {
+        const plainText = stripHtmlTags(art.content || art.title);
+        if (plainText.length > 0) {
+          const cutLen = 180;
+          let newDesc = plainText.substring(0, cutLen).trim();
+          if (plainText.length > cutLen) {
+            newDesc += "...";
+          }
+          art.description = newDesc;
+          updatedCount++;
+        }
+      }
+    }
+    
+    if (updatedCount > 0) {
+      console.log(`[Database Migration] Fixed missing/empty descriptions for ${updatedCount} articles.`);
+      writeDB(db);
+    } else {
+      console.log("[Database Migration] All articles already have valid descriptions.");
+    }
+  } catch (err: any) {
+    console.error("[Database Migration] Error fixing missing descriptions:", err.message);
+  }
 }
 
 // Helper to read database (combining split databases in real-time)
@@ -1001,8 +1040,10 @@ app.put("/api/news/:id", (req, res) => {
   const nowStr = new Date().toISOString();
 
   let description = updateData.description || db.articles[index].description;
-  if (updateData.content && !updateData.description) {
-    description = stripHtmlTags(updateData.content).substring(0, 160) + "...";
+  if (!description || description.trim() === "" || description.trim() === "..." || description.trim().length < 15) {
+    const sourceContent = updateData.content || db.articles[index].content || "";
+    const plainText = stripHtmlTags(sourceContent);
+    description = plainText.substring(0, 180).trim() + (plainText.length > 180 ? "..." : "");
   }
 
   db.articles[index] = {
@@ -1052,72 +1093,73 @@ interface NormalizedNewsItem {
 let newsAgentBuffer: NormalizedNewsItem[] = [];
 let lastApiFetchTime: number = 0;
 
-async function fetchFromNewsData(): Promise<NormalizedNewsItem[]> {
-  const apiKey = "pub_3c0b47363a4f422c9085f6830a4193a0";
-  const url = `https://newsdata.io/api/1/latest?apikey=${apiKey}&country=bd`;
-  console.log(`[News Agent] Fetching from newsdata.io...`);
+async function fetchFromGNews(): Promise<NormalizedNewsItem[]> {
+  const apiKey = "f819de67f9437ceb59490f3031a7f82d";
+  const url = `https://gnews.io/api/v4/search?q=Bangladesh&lang=en&max=10&apikey=${apiKey}`;
+  console.log(`[News Agent] Fetching from gnews.io...`);
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`newsdata.io returned status: ${response.status}`);
+    throw new Error(`gnews.io returned status: ${response.status}`);
   }
   const data = await response.json();
-  if (data.status !== "success" || !Array.isArray(data.results)) {
-    throw new Error(data.results?.message || "Invalid newsdata.io response");
-  }
-  return data.results.map((item: any) => ({
-    source: "newsdata.io",
-    title: item.title || "",
-    description: item.description || "",
-    content: item.content || item.description || "",
-    image_url: item.image_url || "",
-    category: Array.isArray(item.category) ? item.category.join(",") : "",
-    pubDate: item.pubDate || new Date().toISOString(),
-  }));
-}
-
-async function fetchFromNewsApi(): Promise<NormalizedNewsItem[]> {
-  const apiKey = "b8639624e01d46269e8dfe5abef195bc";
-  const url = `https://newsapi.org/v2/everything?q=Bangladesh&sortBy=publishedAt&pageSize=10&apiKey=${apiKey}`;
-  console.log(`[News Agent] Fetching from newsapi.org...`);
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`newsapi.org returned status: ${response.status}`);
-  }
-  const data = await response.json();
-  if (data.status !== "ok" || !Array.isArray(data.articles)) {
-    throw new Error(data.message || "Invalid newsapi.org response");
+  if (!data || !Array.isArray(data.articles)) {
+    throw new Error("Invalid gnews.io response");
   }
   return data.articles.map((item: any) => ({
-    source: "newsapi.org",
+    source: "gnews.io",
     title: item.title || "",
     description: item.description || "",
     content: item.content || item.description || "",
-    image_url: item.urlToImage || "",
+    image_url: item.image || "",
     category: "",
     pubDate: item.publishedAt || new Date().toISOString(),
   }));
 }
 
-async function fetchFromCurrentsApi(): Promise<NormalizedNewsItem[]> {
-  const apiKey = "qE3mA-MBG5tlkmSn7cZ-NrDSXOvdn-gzYJgB-4q0rO19LNNg";
-  const url = `https://api.currentsapi.services/v1/search?keywords=Bangladesh&apiKey=${apiKey}`;
-  console.log(`[News Agent] Fetching from currentsapi.services...`);
+async function fetchFromMediaStack(): Promise<NormalizedNewsItem[]> {
+  const apiKey = "942689bd0a39dbb4d4cda68c24d9aecc";
+  // Free tier of MediaStack restricts to HTTP protocol
+  const url = `http://api.mediastack.com/v1/news?access_key=${apiKey}&keywords=Bangladesh&languages=en&limit=10`;
+  console.log(`[News Agent] Fetching from mediastack.com...`);
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`currentsapi returned status: ${response.status}`);
+    throw new Error(`mediastack.com returned status: ${response.status}`);
   }
   const data = await response.json();
-  if (!Array.isArray(data.news)) {
-    throw new Error("Invalid currentsapi response");
+  if (!data || !Array.isArray(data.data)) {
+    throw new Error("Invalid mediastack.com response");
   }
-  return data.news.map((item: any) => ({
-    source: "currentsapi.services",
+  return data.data.map((item: any) => ({
+    source: "mediastack.com",
     title: item.title || "",
     description: item.description || "",
-    content: item.description || "",
+    content: item.description || item.title || "",
     image_url: item.image || "",
-    category: Array.isArray(item.category) ? item.category.join(",") : "",
-    pubDate: item.published || new Date().toISOString(),
+    category: item.category || "",
+    pubDate: item.published_at || new Date().toISOString(),
+  }));
+}
+
+async function fetchFromApitube(): Promise<NormalizedNewsItem[]> {
+  const apiKey = "api_live_TYHnIKer4tPn3O5hgj42h1jMdTZLCaV316aDMdpbJpOs";
+  console.log(`[News Agent] Fetching from apitube.io...`);
+  const client = new ApitubeClient({ apiKey });
+  const response = await client.news('everything', {
+    title: 'Bangladesh',
+    'language.code': 'en',
+    per_page: 10,
+  });
+  if (!response || !Array.isArray(response.articles)) {
+    throw new Error("Invalid apitube.io response");
+  }
+  return response.articles.map((item: any) => ({
+    source: "apitube.io",
+    title: item.title || "",
+    description: item.description || "",
+    content: item.body || item.description || "",
+    image_url: item.image || "",
+    category: Array.isArray(item.categories) ? item.categories.map((c: any) => c.name).join(",") : "",
+    pubDate: item.publishedAt || new Date().toISOString(),
   }));
 }
 
@@ -1156,17 +1198,17 @@ function isDuplicateArticle(db: any, originalTitle: string, translatedTitle: str
   const tOriginal = norm(originalTitle);
   const tTranslated = norm(translatedTitle);
   
-  if (!tOriginal || !tTranslated) return true;
+  if (!tOriginal && !tTranslated) return true;
   
   return db.articles.some((art: Article) => {
     const artTitle = norm(art.title);
     const artSub = art.subtitle ? norm(art.subtitle) : "";
     const artDSub = art.dSubTitle ? norm(art.dSubTitle) : "";
     
-    return artTitle === tOriginal || 
-           artTitle === tTranslated || 
-           (artSub && (artSub === tOriginal || artSub === tTranslated)) ||
-           (artDSub && (artDSub === tOriginal || artDSub === tTranslated));
+    const matchesOriginal = tOriginal && (artTitle === tOriginal || artSub === tOriginal || artDSub === tOriginal);
+    const matchesTranslated = tTranslated && (artTitle === tTranslated || artSub === tTranslated || artDSub === tTranslated);
+    
+    return matchesOriginal || matchesTranslated;
   });
 }
 
@@ -1264,10 +1306,18 @@ Return the output in JSON format matching exactly the following JSON schema:
             return t.trim().length > 0 && !low.includes("agent") && !low.includes("এজেন্ট") && !low.includes("সংগ্রাহক");
           });
 
+        const cleanedTitle = cleanExtraneousText(parsed.title);
+        const cleanedContent = cleanExtraneousText(parsed.content);
+        let cleanedDesc = cleanExtraneousText(parsed.description);
+
+        if (!cleanedDesc || cleanedDesc.trim().length < 15 || cleanedDesc === "...") {
+          cleanedDesc = cleanedContent.substring(0, 180).trim() + (cleanedContent.length > 180 ? "..." : "");
+        }
+
         return {
-          title: cleanExtraneousText(parsed.title),
-          description: cleanExtraneousText(parsed.description),
-          content: cleanExtraneousText(parsed.content),
+          title: cleanedTitle,
+          description: cleanedDesc,
+          content: cleanedContent,
           tags: cleanTags.length > 0 ? cleanTags : ["জাতীয়", "বাংলাদেশ", "সর্বশেষ"]
         };
       }
@@ -1278,10 +1328,17 @@ Return the output in JSON format matching exactly the following JSON schema:
 
   // Fallback translation/cleanup
   const fallbackTitle = cleanExtraneousText(title);
-  const fallbackContent = cleanExtraneousText(content);
+  let fallbackContent = cleanExtraneousText(content || title);
+  if (fallbackContent.trim().length < 20) {
+    fallbackContent = fallbackTitle + " - বিস্তারিত সংবাদটি শীঘ্রই আপডেট করা হচ্ছে।";
+  }
+  let desc = fallbackContent.substring(0, 180).trim();
+  if (fallbackContent.length > 180) {
+    desc += "...";
+  }
   return {
     title: fallbackTitle,
-    description: fallbackContent.substring(0, 160) + "...",
+    description: desc,
     content: fallbackContent,
     tags: ["জাতীয়", "বাংলাদেশ", "সর্বশেষ"]
   };
@@ -1303,32 +1360,45 @@ async function refillBufferIfNeeded() {
   
   let allFetchedItems: NormalizedNewsItem[] = [];
   
-  // Try newsdata.io
+  // 1. Try GNews first
   try {
-    const items = await fetchFromNewsData();
-    allFetchedItems = allFetchedItems.concat(items);
+    const items = await fetchFromGNews();
+    if (items && items.length > 0) {
+      console.log(`[News Agent] Successfully fetched ${items.length} items from gnews.io`);
+      allFetchedItems = allFetchedItems.concat(items);
+    }
   } catch (err: any) {
-    console.error("[News Agent] newsdata.io fetch failed:", err.message);
+    console.error("[News Agent] gnews.io fetch failed:", err.message);
   }
 
-  // Try newsapi.org
-  try {
-    const items = await fetchFromNewsApi();
-    allFetchedItems = allFetchedItems.concat(items);
-  } catch (err: any) {
-    console.error("[News Agent] newsapi.org fetch failed:", err.message);
+  // 2. Fallback to api.apitube.io if we got nothing from gnews.io
+  if (allFetchedItems.length === 0) {
+    try {
+      const items = await fetchFromApitube();
+      if (items && items.length > 0) {
+        console.log(`[News Agent] Fallback: Successfully fetched ${items.length} items from api.apitube.io`);
+        allFetchedItems = allFetchedItems.concat(items);
+      }
+    } catch (err: any) {
+      console.error("[News Agent] api.apitube.io fetch failed:", err.message);
+    }
   }
 
-  // Try currentsapi.services
-  try {
-    const items = await fetchFromCurrentsApi();
-    allFetchedItems = allFetchedItems.concat(items);
-  } catch (err: any) {
-    console.error("[News Agent] currentsapi.services fetch failed:", err.message);
+  // 3. Fallback to mediastack.com if we still have nothing
+  if (allFetchedItems.length === 0) {
+    try {
+      const items = await fetchFromMediaStack();
+      if (items && items.length > 0) {
+        console.log(`[News Agent] Fallback: Successfully fetched ${items.length} items from mediastack.com`);
+        allFetchedItems = allFetchedItems.concat(items);
+      }
+    } catch (err: any) {
+      console.error("[News Agent] mediastack.com fetch failed:", err.message);
+    }
   }
 
   if (allFetchedItems.length === 0) {
-    console.warn("[News Agent] All news APIs failed to return items.");
+    console.warn("[News Agent] All requested news APIs (GNews, ApiTube, MediaStack) failed or returned no items.");
     return;
   }
 
@@ -1478,7 +1548,7 @@ app.get("/api/news-agent/status", (req, res) => {
     lastRunTime: lastAgentRunTime,
     lastRunResult: lastAgentRunResult,
     lastAddedCount: lastAgentAddedCount,
-    apiKeyUsed: "newsdata.io, newsapi.org, currentsapi.services",
+    apiKeyUsed: "gnews.io, api.apitube.io, mediastack.com",
     intervalMinutes: 0.16
   });
 });
